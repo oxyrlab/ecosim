@@ -1,0 +1,129 @@
+/**
+ * Documentation & quality gate (`npm run docs:check`). Fails when:
+ * 1. a required documentation or catalog file is missing;
+ * 2. a source file under `src/` with runtime code (other than `index.ts` and `src/main.ts`) lacks a sibling `.test.ts`;
+ * 3. a public export in `src/` lacks a TSDoc block directly above it;
+ * 4. a relative markdown link in `docs/` or root `*.md` points to a missing file;
+ * 5. a registered rule is missing from `docs/catalog/rules.md`.
+ */
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { shapeRegistry } from '@appearance/shapes';
+import { actuatorRegistry, organRegistry, sensorRegistry } from '@body/index';
+import '@rules/defs';
+import { ruleRegistry } from '@rules/define-rule';
+import { spineRegistry } from '@spine/index';
+
+const root = resolve(import.meta.dirname, '..');
+const problems: string[] = [];
+
+function walk(directory: string): string[] {
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory).flatMap((entry) => {
+    const full = join(directory, entry);
+    return statSync(full).isDirectory() ? walk(full) : [full];
+  });
+}
+
+const requiredFiles = [
+  'AGENTS.md',
+  'CLAUDE.md',
+  'README.md',
+  'docs/README.md',
+  'docs/STATUS.md',
+  'docs/CHANGELOG.md',
+  'docs/glossary.md',
+  'docs/templates/component.md',
+  'docs/templates/adr.md',
+  'docs/catalog/rules.md',
+  'docs/catalog/shapes.md',
+  'docs/catalog/organs.md',
+  'docs/catalog/sensors.md',
+  'docs/catalog/actuators.md',
+  'docs/catalog/brain-modules.md',
+  'docs/catalog/channels.md',
+];
+
+for (const file of requiredFiles) {
+  if (!existsSync(join(root, file))) {
+    problems.push(`Missing required documentation file: ${file}`);
+  }
+}
+
+const sourceFiles = walk(join(root, 'src')).filter(
+  (file) =>
+    file.endsWith('.ts') &&
+    !file.endsWith('.d.ts') &&
+    !file.endsWith('.test.ts') &&
+    !file.endsWith('/index.ts') &&
+    !file.endsWith('/main.ts') &&
+    !file.endsWith('/render/renderer.ts'),
+);
+
+for (const file of sourceFiles) {
+  const relative = file.slice(root.length + 1);
+  const lines = readFileSync(file, 'utf8').split('\n');
+  const hasRuntimeCode = lines.some((line) => /^export\s+(class|function|const|enum)\s/.test(line));
+  if (hasRuntimeCode && !existsSync(file.replace(/\.ts$/, '.test.ts'))) {
+    problems.push(
+      `${relative}: missing sibling unit test (${relative.replace(/\.ts$/, '.test.ts')}).`,
+    );
+  }
+
+  lines.forEach((line, index) => {
+    if (/^export\s/.test(line) && !/^export\s+(type\s+)?\{/.test(line)) {
+      const previous = lines[index - 1]?.trim() ?? '';
+      if (!previous.endsWith('*/')) {
+        problems.push(`${relative}:${index + 1}: public export without a TSDoc block.`);
+      }
+    }
+  });
+}
+
+const markdownFiles = [
+  ...walk(join(root, 'docs')).filter((file) => file.endsWith('.md')),
+  ...readdirSync(root)
+    .filter((file) => file.endsWith('.md'))
+    .map((file) => join(root, file)),
+];
+
+const linkPattern = /\[[^\]]*\]\(([^)]+)\)/g;
+for (const file of markdownFiles) {
+  const text = readFileSync(file, 'utf8');
+  for (const match of text.matchAll(linkPattern)) {
+    const target = match[1]?.split('#')[0] ?? '';
+    if (target === '' || /^[a-z]+:/i.test(target)) continue;
+    if (!existsSync(resolve(dirname(file), target))) {
+      problems.push(`${file.slice(root.length + 1)}: broken link "${target}".`);
+    }
+  }
+}
+
+const catalogChecks: Array<{ readonly file: string; readonly ids: readonly string[] }> = [
+  { file: 'docs/catalog/rules.md', ids: ruleRegistry.ids() },
+  { file: 'docs/catalog/shapes.md', ids: shapeRegistry.ids() },
+  { file: 'docs/catalog/organs.md', ids: organRegistry.ids() },
+  { file: 'docs/catalog/sensors.md', ids: sensorRegistry.ids() },
+  { file: 'docs/catalog/actuators.md', ids: actuatorRegistry.ids() },
+  { file: 'docs/catalog/brain-modules.md', ids: spineRegistry.ids() },
+];
+
+for (const check of catalogChecks) {
+  const fullPath = join(root, check.file);
+  if (!existsSync(fullPath)) continue;
+  const catalogText = readFileSync(fullPath, 'utf8');
+  for (const id of check.ids) {
+    if (!catalogText.includes(`\`${id}\``)) {
+      problems.push(`${check.file}: registered id "${id}" missing (run npm run docs:catalog).`);
+    }
+  }
+}
+
+if (problems.length > 0) {
+  console.error(
+    `docs:check failed with ${problems.length} problem(s):\n- ${problems.join('\n- ')}`,
+  );
+  process.exit(1);
+}
+
+console.log('docs:check passed.');

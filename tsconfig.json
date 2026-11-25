@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["src/core/*"],
+      "@config/*": ["src/config/*"],
+      "@rules/*": ["src/rules/*"],
+      "@appearance/*": ["src/appearance/*"],
+      "@physics/*": ["src/physics/*"],
+      "@world/*": ["src/world/*"],
+      "@bus/*": ["src/bus/*"],
+      "@body/*": ["src/body/*"],
+      "@brain/*": ["src/brain/*"],
+      "@spine/*": ["src/spine/*"],
+      "@life/*": ["src/life/*"],
+      "@plants/*": ["src/plants/*"],
+      "@genome/*": ["src/genome/*"],
+      "@species/*": ["src/species/*"],
+      "@sim/*": ["src/sim/*"],
+      "@render/*": ["src/render/*"],
+      "@ui/*": ["src/ui/*"],
+      "@headless/*": ["src/headless/*"]
+    }
+  },
+  "include": ["src", "scripts", "tests", "vite.config.ts", "vitest.config.ts", "eslint.config.js"]
+}

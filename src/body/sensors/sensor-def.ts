@@ -28,6 +28,18 @@ export interface SensorRaycastHit {
 }
 
 /**
+ * Read-only internal proprioceptive body metrics exposed to internal sensors (energy, pain).
+ */
+export interface InternalBodyState {
+  /** Normalized remaining energy `current / max` in `[0, 1]`. */
+  readonly energyRatio: number;
+  /** Normalized remaining health `current / max` in `[0, 1]`. */
+  readonly healthRatio: number;
+  /** One-tick normalized pain spike in `[0, 1]` from recent damage. */
+  readonly painPulse: number;
+}
+
+/**
  * Strictly read-only world and body view injected into every sensor during `sample()`.
  */
 export interface SensorContext {
@@ -37,6 +49,8 @@ export interface SensorContext {
   readonly position: Vec2;
   /** World-space sensor forward orientation in radians. */
   readonly angle: number;
+  /** Optional internal metabolic/health state for proprioceptive sensors (`energy-sensor`, `pain-sensor`). */
+  readonly bodyState?: InternalBodyState;
   /** Queries nearby entities within `radiusMeters` using the world's `SpatialHash`. */
   queryNeighbors(origin: Vec2, radiusMeters: number): readonly NeighborObservation[];
   /** Samples a named `GridField` at `(x, y)` meters via bilinear interpolation. */

@@ -236,6 +236,8 @@ const SENSOR_FIXTURES: Readonly<Record<string, { validParams: unknown; invalidPa
   {
     'vision-sensor': { validParams: {}, invalidParams: { rangeMeters: -1 } },
     'olfactory-sensor': { validParams: {}, invalidParams: { channels: [] } },
+    'energy-sensor': { validParams: {}, invalidParams: 'invalid' },
+    'pain-sensor': { validParams: {}, invalidParams: 'invalid' },
   };
 
 const ACTUATOR_FIXTURES: Readonly<
@@ -255,7 +257,7 @@ describe('Automatic registry contract coverage', () => {
     expect(shapeRegistry.size).toBe(7);
     expect(ruleRegistry.size).toBe(15);
     expect(organRegistry.size).toBe(4);
-    expect(sensorRegistry.size).toBe(2);
+    expect(sensorRegistry.size).toBe(4);
     expect(actuatorRegistry.size).toBe(3);
     expect(spineRegistry.size).toBe(1);
 

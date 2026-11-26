@@ -1,6 +1,8 @@
 import type { PortMap } from '@bus/ports';
 import type { Registry } from '@core/index';
+import { energySensor } from './energy-sensor';
 import { olfactorySensor } from './olfactory-sensor';
+import { painSensor } from './pain-sensor';
 import { registerSensor, sensorRegistry, type SensorDef } from './sensor-def';
 import { visionSensor } from './vision-sensor';
 
@@ -8,6 +10,8 @@ import { visionSensor } from './vision-sensor';
 export const BUILTIN_SENSORS: readonly SensorDef<unknown, PortMap>[] = Object.freeze([
   visionSensor as SensorDef<unknown, PortMap>,
   olfactorySensor as SensorDef<unknown, PortMap>,
+  energySensor as SensorDef<unknown, PortMap>,
+  painSensor as SensorDef<unknown, PortMap>,
 ]);
 
 /** Registers all built-in sensors into `registry` (idempotent). */
@@ -23,16 +27,19 @@ export function registerBuiltinSensors(
 
 registerBuiltinSensors(sensorRegistry);
 
+export { energySensor, energySensorParamsSchema } from './energy-sensor';
 export {
   olfactorySensor,
   olfactorySensorParamsSchema,
   type OlfactorySensorParams,
 } from './olfactory-sensor';
+export { painSensor, painSensorParamsSchema } from './pain-sensor';
 export {
   defineSensor,
   registerSensor,
   resolvePortMap,
   sensorRegistry,
+  type InternalBodyState,
   type NeighborObservation,
   type PortMapOrFactory,
   type SensorContext,

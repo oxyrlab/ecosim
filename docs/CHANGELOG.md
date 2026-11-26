@@ -4,6 +4,13 @@ All notable changes to EcoSim, including any changes to default Constraint Rule 
 
 ## [Unreleased]
 
+### Added — Phase 3 (Life)
+
+- Added `src/life/`: `EnergyComponent`, `LifecycleComponent`, `HealthComponent`, `DietComponent`, `CorpseComponent`, auditable `EnergyLedger` + `computeWorldEnergy`, `stepAgingSystem`, `stepMetabolismSystem`, `stepHealthSystem`, `stepInteractionSystem`, `stepDeathSystem`, and `stepDecompositionSystem`.
+- Added internal proprioceptive sensors `energy-sensor` (`level`, `deficit`) and `pain-sensor` (`pain`, `health`) in `src/body/sensors/` wired via `SensorContext.bodyState`.
+- Added 90% per-module coverage thresholds for `src/life/**/*.ts`, full unit tests, updated registry contract tests, and real Rapier WASM lifecycle + exact `EnergyLedger` integration tests (`tests/integration/life-cycle.test.ts`).
+- Added `docs/concepts/metabolism.md` and `docs/concepts/lifecycle.md`, and regenerated `docs/catalog/sensors.md`.
+
 ### Added — Phase 2 (Nervous System)
 
 - Added `src/bus/`: double-buffered `Float32Array` `SignalBus`, typed `port` builders (`analog`, `pulse`, `bundle('behavior')`), broadcast hormones (`HORMONE_SPECS`), and static wiring resolver (`resolveWiring`, `inspectWiring`).

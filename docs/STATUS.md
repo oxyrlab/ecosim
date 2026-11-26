@@ -1,31 +1,25 @@
 # Project Status
 
-- **Current Phase:** Phase 2 — Nervous System (**Complete**)
-- **Next Phase:** Phase 3 — Life
-- **Last Updated:** 2026-11-25
+- **Current Phase:** Phase 3 — Life (**Complete**)
+- **Next Phase:** Phase 4 — Plants
+- **Last Updated:** 2026-11-26
 
-## Completed in Phase 2
+## Completed in Phase 3
 
-- **SignalBus & Wiring (`src/bus/`):** implemented double-buffered `Float32Array` `SignalBus` (1-tick delay, range clamping, analog persistence, 1-tick pulse auto-reset, zero hot-loop allocations), `port.analog` / `port.pulse` / `port.bundle('behavior')`, broadcast hormones (`HORMONE_SPECS`), and `resolveWiring` (`<instanceId>:<port>`, fan-out, merged fan-in `sum|max|min|avg`, bundle expansion, hormone pub/sub, and static diagnostics).
-- **Component Contracts & Registries:** added `defineOrgan`, `defineSensor`, `defineActuator`, `defineBrainModule`, `defineSpine` with typed `PortHandleMap` inference and global registries.
-- **Initial Components (`src/body/`, `src/spine/`):**
-  - Organs: `body-core`, `eye`, `nose`, `mouth`
-  - Sensors: `vision-sensor` (sector FOV, SpatialHash, optional Rapier raycast occlusion, dynamic tag bearings), `olfactory-sensor` (stereo left/right bilinear intensity & signed gradient)
-  - Actuators: `thruster`, `rotator`, `bite` (with cooldown, action events, and `EnergyCostModel`)
-  - Spine: generic `differential-drive`
-- **Nervous-System Constraint Rules (`src/rules/defs/`):** added all 7 nervous-system rules (`max-sensors-per-creature`, `max-brain-modules`, `max-bus-channels`, `unmerged-fan-in`, `unconnected-input`, `unused-output`, `numeric-index-on-logical-port`) with Layer 1 defaults in `src/config/rules.default.ts` (15 total registered rules).
-- **Contracts & Integration Tests:** added `runOrganContract`, `runSensorContract`, `runActuatorContract`, `runBrainModuleContract`, `runSpineContract` (all running automatically over live registries), plus end-to-end Rapier integration tests (`vision -> bus -> brain -> spine -> mirrored visual thrusters -> Rapier` and `scent emit -> diffusion -> olfactory-sensor`).
-- **Docs & Catalog:** added `docs/architecture/signal-bus.md`, `docs/concepts/{organ,sensor,actuator,brain,spine}.md`, `docs/guides/{add-organ,add-sensor,add-brain-module}.md`, and auto-generated all 7 catalog files in `docs/catalog/`.
+- **Life Components (`src/life/components.ts`):** added `EnergyComponent`, `LifecycleComponent`, `HealthComponent`, `DietComponent`, and `CorpseComponent` ECS definitions.
+- **Energy Conservation (`src/life/energy-ledger.ts`):** implemented `EnergyLedger` (tracking `initialSpawn`, `lightInput`, `basalMetabolism`, `actuatorWork`, `brainUpkeep`, `feedingWaste`, `reproductionCost`, and internal transfers) and `computeWorldEnergy` for exact conservation auditing.
+- **Metabolism, Aging & Health (`src/life/{metabolism,aging,health}.ts`):** implemented mass-scaled basal + brain + actuator energy consumption with senescence efficiency decline, starvation damage, linear juvenile-to-adult growth `computeGrowthScale`, aging mortality, and queued damage / one-tick `recentPainPulse` resolution.
+- **Predation, Death & Decomposition (`src/life/{interaction,death,decomposition}.ts`):** implemented bite interaction resolution (damage, energy transfer, assimilation efficiency, corpse scavenging), clean death-to-corpse conversion (releasing Rapier handles without leaks), and gradual corpse decomposition into `soil.nutrients` + `scent.corpse`.
+- **Internal Proprioceptive Sensors (`src/body/sensors/{energy,pain}-sensor.ts`):** extended `SensorContext` with optional `bodyState` (`InternalBodyState`) and registered `energy-sensor` (`level`, `deficit`) and `pain-sensor` (`pain` pulse, `health`).
+- **Tests & Docs:** added unit tests for every `src/life/` module and both new sensors, updated automatic registry contracts (4 registered sensors), added real Rapier WASM lifecycle + exact `EnergyLedger` integration tests (`tests/integration/life-cycle.test.ts`), and added `docs/concepts/metabolism.md` & `docs/concepts/lifecycle.md`.
 
-## Exact Next Task (Phase 3 — Life)
+## Exact Next Task (Phase 4 — Plants)
 
-1. Implement `src/life/`:
-   - **Metabolism & Energy (`EnergyStore` + `MetabolismSystem`):** base consumption as a function of mass + actuator costs + brain upkeep cost.
-   - **EnergyLedger:** auditable conservation tracking of all system inflows/outflows (light input, metabolism heat loss, bite transfer, corpse decomposition, reproduction transfer).
-   - **Aging & Lifecycle (`AgingSystem`):** `age`, `maxAge`, maturity growth scale `scale(age)`, senescence efficiency decline.
-   - **Health & Damage (`HealthSystem`):** bite damage, starvation damage, aging damage, and feeding/predation `InteractionSystem`.
-   - **Death & Decomposition (`DeathSystem`, `DecompositionSystem`):** creature → `corpse` entity holding remaining energy → gradual release into `soil.nutrients` and `scent.corpse` → clean removal.
-2. Add unit and integration tests (predator bite damage & energy transfer, death → corpse → decomposition → `soil.nutrients` increase, `EnergyLedger` balance check).
+1. Implement `src/plants/`:
+   - **Plant components & photosynthesis:** absorb light from the `light` field and nutrients from `soil.nutrients` (plus moisture when present) to grow biomass/energy, logging solar inflow to `EnergyLedger.recordLightInput`.
+   - **Growth, reproduction & fruiting:** mature plants produce seeds or fruit carrying energy and `scent.fruit`; seed dispersal and germination with overcrowding competition.
+   - **Plant visual layout & rules:** species presets (e.g. grass/bush/tree or herb/berry bush) compatible with appearance rendering and herbivore grazing/biting.
+2. Add unit and integration tests (plant growth from light + soil nutrients, fruit/seed spawning, herbivore eating plant, closed nutrient loop `plant -> herbivore -> corpse -> soil.nutrients -> plant` audited by `EnergyLedger`).
 
 ## Open Design Questions
 
@@ -40,6 +34,6 @@
 
 ## Open Issues & Technical Debt
 
-- None in Phase 2.
+- None in Phase 3.
 - Phase 7 includes the interactive Sandbox / World Editor UI built on `CommandQueue` ([ADR 0009](adr/0009-deterministic-sandbox-commands.md)).
 - `@oxyrlab/neuro-learn` (`../neuro-learn`) is ready at `v0.1.0` for Phase 6 integration ([ADR 0008](adr/0008-in-house-learning.md)).

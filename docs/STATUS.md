@@ -1,25 +1,24 @@
 # Project Status
 
-- **Current Phase:** Phase 3 — Life (**Complete**)
-- **Next Phase:** Phase 4 — Plants
+- **Current Phase:** Phase 4 — Plants (**Complete**)
+- **Next Phase:** Phase 5 — First Ecosystem
 - **Last Updated:** 2026-11-26
 
-## Completed in Phase 3
+## Completed in Phase 4
 
-- **Life Components (`src/life/components.ts`):** added `EnergyComponent`, `LifecycleComponent`, `HealthComponent`, `DietComponent`, and `CorpseComponent` ECS definitions.
-- **Energy Conservation (`src/life/energy-ledger.ts`):** implemented `EnergyLedger` (tracking `initialSpawn`, `lightInput`, `basalMetabolism`, `actuatorWork`, `brainUpkeep`, `feedingWaste`, `reproductionCost`, and internal transfers) and `computeWorldEnergy` for exact conservation auditing.
-- **Metabolism, Aging & Health (`src/life/{metabolism,aging,health}.ts`):** implemented mass-scaled basal + brain + actuator energy consumption with senescence efficiency decline, starvation damage, linear juvenile-to-adult growth `computeGrowthScale`, aging mortality, and queued damage / one-tick `recentPainPulse` resolution.
-- **Predation, Death & Decomposition (`src/life/{interaction,death,decomposition}.ts`):** implemented bite interaction resolution (damage, energy transfer, assimilation efficiency, corpse scavenging), clean death-to-corpse conversion (releasing Rapier handles without leaks), and gradual corpse decomposition into `soil.nutrients` + `scent.corpse`.
-- **Internal Proprioceptive Sensors (`src/body/sensors/{energy,pain}-sensor.ts`):** extended `SensorContext` with optional `bodyState` (`InternalBodyState`) and registered `energy-sensor` (`level`, `deficit`) and `pain-sensor` (`pain` pulse, `health`).
-- **Tests & Docs:** added unit tests for every `src/life/` module and both new sensors, updated automatic registry contracts (4 registered sensors), added real Rapier WASM lifecycle + exact `EnergyLedger` integration tests (`tests/integration/life-cycle.test.ts`), and added `docs/concepts/metabolism.md` & `docs/concepts/lifecycle.md`.
+- **Plant & Fruit Components (`src/plants/components.ts`, `src/plants/spawn.ts`):** added `PlantComponent` (`kingdom: 'plant'`, lifecycle stages, growing `stemLength`/`leafArea`/`flowerCount`, carrier dispersal state), `FruitComponent` (independent entity with `tags: ['fruit']`, flesh energy + internal seed energy), Zod-validated `plantSpeciesSpecSchema` / `parsePlantSpeciesSpec`, and `spawnPlant` / `spawnFruit`.
+- **Photosynthesis & Lifecycle (`src/plants/photosynthesis.ts`, `src/plants/lifecycle.ts`):** implemented nutrient-limited photosynthesis from `light`, `soil.nutrients`, and `soil.moisture` (logging solar inflow via `EnergyLedger.recordLightInput`), full state machine (`seed → sprout → mature → flowering → fruiting → senescence → death`), crowding check on germination, organ growth, and leak-free collider radius resizing via `PhysicsAdapter`.
+- **Pollination, Fruiting & Seed Dispersal (`src/plants/{pollination,fruit,dispersal}.ts`):** implemented same-species distance pollination (`pollinationRadiusMeters`), energy-conserving fruit spawning, `recordFruitBites` integration with `stepInteractionSystem`, endozoochorous seed carrying/excretion after `dispersalDelaySeconds`, and expired-fruit germination or decomposition into `soil.nutrients`.
+- **Tests & Docs:** added unit tests for all 6 modules in `src/plants/`, 90% coverage thresholds in `vitest.config.ts`, real Rapier WASM integration tests (`tests/integration/plant-cycle.test.ts`) proving full plant generation turnover, herbivore seed dispersal, closed nutrient recycling, exact `EnergyLedger` conservation, and zero handle leaks, plus `docs/concepts/plants.md`.
 
-## Exact Next Task (Phase 4 — Plants)
+## Exact Next Task (Phase 5 — First Ecosystem)
 
-1. Implement `src/plants/`:
-   - **Plant components & photosynthesis:** absorb light from the `light` field and nutrients from `soil.nutrients` (plus moisture when present) to grow biomass/energy, logging solar inflow to `EnergyLedger.recordLightInput`.
-   - **Growth, reproduction & fruiting:** mature plants produce seeds or fruit carrying energy and `scent.fruit`; seed dispersal and germination with overcrowding competition.
-   - **Plant visual layout & rules:** species presets (e.g. grass/bush/tree or herb/berry bush) compatible with appearance rendering and herbivore grazing/biting.
-2. Add unit and integration tests (plant growth from light + soil nutrients, fruit/seed spawning, herbivore eating plant, closed nutrient loop `plant -> herbivore -> corpse -> soil.nutrients -> plant` audited by `EnergyLedger`).
+1. Implement shared behavioral brain modules (`src/brain/modules/`):
+   - `hunger-drive`, `seek-gradient`, `random-wander`, and `behavior-arbiter` (named slots + `behavior` bundle).
+2. Implement initial ecosystem species (`src/species/`):
+   - Plants: `grass`, `berry-bush`
+   - Animals: `rabbit` (canonical reference species with `guides/add-species.md`; herbivore with species-specific brain/spine/appearance) and `fox` (predator).
+3. Build a balanced scenario and scenario tests verifying invariants (no NaN/Infinity, exact `EnergyLedger` balance, deterministic state hash across identical seeds, stable populations).
 
 ## Open Design Questions
 

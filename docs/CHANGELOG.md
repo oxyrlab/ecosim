@@ -4,6 +4,12 @@ All notable changes to EcoSim, including any changes to default Constraint Rule 
 
 ## [Unreleased]
 
+### Added — Phase 4 (Plants)
+
+- Added `src/plants/`: `PlantComponent`, `FruitComponent`, `plantSpeciesSpecSchema` / `parsePlantSpeciesSpec`, `spawnPlant` / `spawnFruit`, `stepPhotosynthesisSystem`, `stepPlantLifecycleSystem` (full state machine + organ growth + collider resizing), `stepPollinationSystem`, `stepFruitSystem` / `recordFruitBites`, and `stepSeedDispersalSystem`.
+- Added 90% per-module coverage thresholds for `src/plants/**/*.ts`, unit tests for every module, and real Rapier WASM integration tests (`tests/integration/plant-cycle.test.ts`) covering full plant generation turnover, endozoochorous seed dispersal, closed nutrient recycling, and exact `EnergyLedger` conservation.
+- Added `docs/concepts/plants.md` and updated `docs/README.md` & `docs/STATUS.md`.
+
 ### Added — Phase 3 (Life)
 
 - Added `src/life/`: `EnergyComponent`, `LifecycleComponent`, `HealthComponent`, `DietComponent`, `CorpseComponent`, auditable `EnergyLedger` + `computeWorldEnergy`, `stepAgingSystem`, `stepMetabolismSystem`, `stepHealthSystem`, `stepInteractionSystem`, `stepDeathSystem`, and `stepDecompositionSystem`.

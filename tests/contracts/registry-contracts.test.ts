@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
 import { chain, shapeRegistry } from '@appearance/index';
 import { actuatorRegistry, organRegistry, sensorRegistry } from '@body/index';
-import { defineBrainModule } from '@brain/index';
+import { brainModuleRegistry } from '@brain/index';
 import { port } from '@bus/index';
 import { ruleRegistry, type BlueprintBodySubject } from '@rules/index';
+import { speciesRegistry } from '@species/index';
 import { spineRegistry } from '@spine/index';
 import { CAT_BODY_FIXTURE, CONCAVE_ARROW_BODY_FIXTURE } from '../fixtures/creatures';
 import {
@@ -252,19 +252,35 @@ const SPINE_FIXTURES: Readonly<Record<string, { validParams: unknown; invalidPar
   'differential-drive': { validParams: {}, invalidParams: { turnGain: 0 } },
 };
 
+const BRAIN_MODULE_FIXTURES: Readonly<
+  Record<string, { validParams: unknown; invalidParams: unknown }>
+> = {
+  'hunger-drive': { validParams: {}, invalidParams: { threshold: 2 } },
+  'seek-gradient': { validParams: {}, invalidParams: { visionTurnGain: 0 } },
+  'random-wander': { validParams: {}, invalidParams: { turnIntervalSeconds: 0 } },
+  'behavior-arbiter': { validParams: {}, invalidParams: { slots: [] } },
+  'rabbit-flee-predator': { validParams: {}, invalidParams: { escapeSpeed: 2 } },
+  'fox-hunt-prey': { validParams: {}, invalidParams: { chaseSpeed: 0 } },
+};
+
 describe('Automatic registry contract coverage', () => {
-  it('covers every registered shape, rule, organ, sensor, actuator, and spine', () => {
+  it('covers every registered shape, rule, organ, sensor, actuator, brain module, spine, and species', () => {
     expect(shapeRegistry.size).toBe(7);
     expect(ruleRegistry.size).toBe(15);
     expect(organRegistry.size).toBe(4);
     expect(sensorRegistry.size).toBe(4);
     expect(actuatorRegistry.size).toBe(3);
+    expect(brainModuleRegistry.size).toBe(6);
     expect(spineRegistry.size).toBe(1);
+    expect(speciesRegistry.size).toBe(4);
 
     for (const def of shapeRegistry.list()) expect(SHAPE_FIXTURES[def.id]).toBeDefined();
     for (const def of ruleRegistry.list()) expect(RULE_FIXTURES[def.id]).toBeDefined();
     for (const def of sensorRegistry.list()) expect(SENSOR_FIXTURES[def.id]).toBeDefined();
     for (const def of actuatorRegistry.list()) expect(ACTUATOR_FIXTURES[def.id]).toBeDefined();
+    for (const def of brainModuleRegistry.list()) {
+      expect(BRAIN_MODULE_FIXTURES[def.id]).toBeDefined();
+    }
     for (const def of spineRegistry.list()) expect(SPINE_FIXTURES[def.id]).toBeDefined();
   });
 });
@@ -286,28 +302,11 @@ for (const def of actuatorRegistry.list()) {
   const f = ACTUATOR_FIXTURES[def.id];
   if (f !== undefined) runActuatorContract(def, f);
 }
+for (const def of brainModuleRegistry.list()) {
+  const f = BRAIN_MODULE_FIXTURES[def.id];
+  if (f !== undefined) runBrainModuleContract(def, f);
+}
 for (const def of spineRegistry.list()) {
   const f = SPINE_FIXTURES[def.id];
   if (f !== undefined) runSpineContract(def, f);
 }
-
-// Verify BrainModuleContract itself on a minimal sample rule module (shared modules land in Phase 5)
-const sampleBrainModule = defineBrainModule({
-  id: 'sample-turn-toward',
-  kind: 'rule',
-  description: 'Contract verification brain module.',
-  params: z.object({ gain: z.number().positive().default(1) }),
-  inputs: { dir: port.analog({ range: [-1, 1], description: 'target bearing' }) },
-  outputs: { turn: port.analog({ range: [-1, 1], description: 'steering' }) },
-  create(params, { inputs, outputs }) {
-    return {
-      tick(input, output) {
-        output.set(outputs.turn, input.get(inputs.dir) * params.gain);
-      },
-    };
-  },
-});
-runBrainModuleContract(sampleBrainModule as never, {
-  validParams: { gain: 1 },
-  invalidParams: { gain: -1 },
-});

@@ -7,3 +7,4 @@ export {
   type BrainModuleInstance,
   type BrainModuleKind,
 } from './module-def';
+export * from './modules';

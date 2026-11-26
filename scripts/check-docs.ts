@@ -10,8 +10,10 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { shapeRegistry } from '@appearance/shapes';
 import { actuatorRegistry, organRegistry, sensorRegistry } from '@body/index';
+import { brainModuleRegistry } from '@brain/index';
 import '@rules/defs';
 import { ruleRegistry } from '@rules/define-rule';
+import { speciesRegistry } from '@species/index';
 import { spineRegistry } from '@spine/index';
 
 const root = resolve(import.meta.dirname, '..');
@@ -105,7 +107,11 @@ const catalogChecks: Array<{ readonly file: string; readonly ids: readonly strin
   { file: 'docs/catalog/organs.md', ids: organRegistry.ids() },
   { file: 'docs/catalog/sensors.md', ids: sensorRegistry.ids() },
   { file: 'docs/catalog/actuators.md', ids: actuatorRegistry.ids() },
-  { file: 'docs/catalog/brain-modules.md', ids: spineRegistry.ids() },
+  {
+    file: 'docs/catalog/brain-modules.md',
+    ids: [...brainModuleRegistry.ids(), ...spineRegistry.ids()],
+  },
+  { file: 'docs/catalog/species/README.md', ids: speciesRegistry.ids() },
 ];
 
 for (const check of catalogChecks) {

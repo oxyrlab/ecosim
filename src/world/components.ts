@@ -19,6 +19,8 @@ export interface TransformData {
 export interface PhysicsBodyData {
   /** Primary rigid body handle. */
   readonly bodyHandle: BodyHandle;
+  /** Optional secondary rigid body handles for articulated multi-body creatures. */
+  readonly extraBodyHandles?: readonly BodyHandle[];
   /** All collider handles attached to this entity. */
   readonly colliderHandles: readonly ColliderHandle[];
   /** All joint handles owned by this entity. */

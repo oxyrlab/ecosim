@@ -4,6 +4,12 @@ All notable changes to EcoSim, including any changes to default Constraint Rule 
 
 ## [Unreleased]
 
+### Added — Phase 5 (First Ecosystem)
+
+- Added shared brain modules (`src/brain/modules/`): `hunger-drive`, `seek-gradient`, `random-wander`, and `behavior-arbiter` (named `behavior` bundle slots).
+- Added `src/species/`: `SpeciesBlueprint` + `speciesRegistry`, `validateAnimalBlueprint` + `spawnSpeciesEntity`, multi-body `World.removeEntity` handle cleanup, `CreatureBrainComponent` + `stepNervousSystem`, `stepEcosystemTick` + `computeWorldStateHash`, and 4 built-in species (`grass`, `berry-bush`, canonical reference `rabbit` with `rabbit-flee-predator`, and `fox` with `fox-hunt-prey`).
+- Added balanced real-Rapier ecosystem scenario tests (`tests/scenarios/first-ecosystem.test.ts`), automatic brain-module registry contract tests, 90% coverage thresholds for `src/species/**/*.ts`, `docs/guides/add-species.md`, and auto-generated `docs/catalog/species/*.md`.
+
 ### Added — Phase 4 (Plants)
 
 - Added `src/plants/`: `PlantComponent`, `FruitComponent`, `plantSpeciesSpecSchema` / `parsePlantSpeciesSpec`, `spawnPlant` / `spawnFruit`, `stepPhotosynthesisSystem`, `stepPlantLifecycleSystem` (full state machine + organ growth + collider resizing), `stepPollinationSystem`, `stepFruitSystem` / `recordFruitBites`, and `stepSeedDispersalSystem`.

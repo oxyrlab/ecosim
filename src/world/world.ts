@@ -222,14 +222,31 @@ export class World {
   }
 
   /**
+   * Registers an additional physics {@link BodyHandle} to entity mapping (used by `EntityFactory`
+   * when spawning multi-body creatures).
+   */
+  public registerEntityBody(handle: BodyHandle, entity: EntityId): void {
+    this.bodyToEntity.set(handle, entity);
+  }
+
+  /**
    * Removes an entity cleanly from physics, spatial hash, and ECS (preventing WASM handle leaks).
    */
   public removeEntity(entity: EntityId): void {
     if (!this.ecs.isAlive(entity)) return;
     const body = this.ecs.getComponent(entity, PhysicsBodyComponent);
     if (body !== undefined) {
+      for (const joint of body.jointHandles) {
+        this.physics.removeJoint(joint);
+      }
       this.bodyToEntity.delete(body.bodyHandle);
       this.physics.removeBody(body.bodyHandle);
+      if (body.extraBodyHandles !== undefined) {
+        for (const extra of body.extraBodyHandles) {
+          this.bodyToEntity.delete(extra);
+          this.physics.removeBody(extra);
+        }
+      }
     }
     this.spatialHash.remove(entity);
     this.ecs.destroyEntity(entity);

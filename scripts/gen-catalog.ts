@@ -11,6 +11,7 @@ import { HORMONE_SPECS, PORT_BUNDLES } from '@bus/index';
 import { DEFAULT_RULE_CONFIG } from '@config/rules.default';
 import '@rules/defs';
 import { ruleRegistry } from '@rules/define-rule';
+import { speciesRegistry, type SpeciesBlueprint } from '@species/index';
 import { spineRegistry } from '@spine/index';
 
 const root = resolve(import.meta.dirname, '..');
@@ -147,6 +148,56 @@ function generateChannelsCatalog(): string {
   ].join('\n');
 }
 
+function generateSpeciesDoc(sp: SpeciesBlueprint): string {
+  if (sp.kingdom === 'plant') {
+    return [
+      `${AUTO_HEADER}# ${sp.name} (\`${sp.id}\`)`,
+      '',
+      `- **Kingdom:** \`plant\``,
+      `- **Tags:** ${sp.tags.map((t) => `\`${t}\``).join(', ')}`,
+      `- **Description:** ${sp.description}`,
+      '',
+      '| Property | Value |',
+      '|---|---|',
+      `| Adult Radius | ${sp.plantSpec.adultRadius} m |`,
+      `| Max Energy | ${sp.plantSpec.maxEnergy} EU |`,
+      `| Photosynthesis Rate | ${sp.plantSpec.photosynthesisRatePerArea} EU/(m²·s) |`,
+      `| Pollination Radius | ${sp.plantSpec.pollinationRadiusMeters} m |`,
+      `| Fruit Energy (Flesh + Seed) | ${sp.plantSpec.fruitFleshEnergy} + ${sp.plantSpec.seedEnergy} EU |`,
+      '',
+    ].join('\n');
+  }
+
+  return [
+    `${AUTO_HEADER}# ${sp.name} (\`${sp.id}\`)`,
+    '',
+    `- **Kingdom:** \`animal\``,
+    `- **Tags:** ${sp.tags.map((t) => `\`${t}\``).join(', ')}`,
+    `- **Description:** ${sp.description}`,
+    `- **Spine:** \`${sp.spine.spine}\``,
+    `- **Brain Modules:** ${sp.brain.modules.map((m) => `\`${m.instanceId}\` (\`${m.module}\`)`).join(', ')}`,
+    `- **Diet:** ${sp.diet.edibleTags.map((t) => `\`${t}\``).join(', ')} (assimilation \`${sp.diet.assimilationEfficiency}\`)`,
+    '',
+  ].join('\n');
+}
+
+function generateSpeciesIndex(): string {
+  const rows = speciesRegistry
+    .list()
+    .map(
+      (s) =>
+        `| [\`${s.id}\`](${s.id}.md) | ${s.name} | \`${s.kingdom}\` | ${s.tags.map((t) => `\`${t}\``).join(', ')} | ${s.description} |`,
+    );
+  return [
+    `${AUTO_HEADER}# Species Catalog`,
+    '',
+    '| Id | Name | Kingdom | Tags | Description |',
+    '|---|---|---|---|---|',
+    ...rows,
+    '',
+  ].join('\n');
+}
+
 const files: Record<string, string> = {
   'rules.md': generateRulesCatalog(),
   'shapes.md': generateShapesCatalog(),
@@ -155,12 +206,17 @@ const files: Record<string, string> = {
   'actuators.md': generateActuatorsCatalog(),
   'brain-modules.md': generateBrainAndSpinesCatalog(),
   'channels.md': generateChannelsCatalog(),
+  'species/README.md': generateSpeciesIndex(),
 };
+
+for (const sp of speciesRegistry.list()) {
+  files[`species/${sp.id}.md`] = generateSpeciesDoc(sp);
+}
 
 for (const [filename, content] of Object.entries(files)) {
   writeFileSync(join(catalogDir, filename), content, 'utf8');
 }
 
 console.log(
-  `docs:catalog generated ${Object.keys(files).length} files (${shapeRegistry.size} shapes, ${ruleRegistry.size} rules, ${organRegistry.size} organs, ${sensorRegistry.size} sensors, ${actuatorRegistry.size} actuators, ${spineRegistry.size} spines).`,
+  `docs:catalog generated ${Object.keys(files).length} files (${shapeRegistry.size} shapes, ${ruleRegistry.size} rules, ${organRegistry.size} organs, ${sensorRegistry.size} sensors, ${actuatorRegistry.size} actuators, ${brainModuleRegistry.size} brain modules, ${spineRegistry.size} spines, ${speciesRegistry.size} species).`,
 );

@@ -1,7 +1,7 @@
 import type { AppearanceFeatures } from '@appearance/features';
 import type { ResolvedBodyLayout } from '@appearance/types';
-import type { ActuatorActionEvent, ActuatorInstance } from '@body/actuators';
-import type { NeighborObservation, SensorInstance } from '@body/sensors';
+import type { ActuatorActionEvent, ActuatorContext, ActuatorInstance } from '@body/actuators';
+import type { NeighborObservation, SensorContext, SensorInstance } from '@body/sensors';
 import {
   decayNeuromodulators,
   type BrainModuleInstance,
@@ -10,16 +10,15 @@ import {
 import type { PortHandle } from '@bus/ports';
 import type { SignalBus } from '@bus/signal-bus';
 import {
-  add,
   assertFiniteNumber,
   clamp,
   defineComponent,
   InvalidParameterError,
-  rotate,
+  type EntityId,
   type SeededRng,
   type Vec2,
 } from '@core/index';
-import { EnergyComponent, HealthComponent } from '@life/index';
+import { EnergyComponent, HealthComponent, type EnergyData } from '@life/index';
 import type { BodyHandle } from '@physics/types';
 import type { SpineInstance } from '@spine/index';
 import { PhysicsBodyComponent, TagsComponent, TransformComponent, type World } from '@world/index';
@@ -32,6 +31,9 @@ export interface MountedSensorRuntime {
   readonly instanceId: string;
   readonly localPosition: Vec2;
   readonly localAngle: number;
+  readonly sampleRateHz?: number;
+  sampleCooldownSeconds?: number;
+  sampledOnce?: boolean;
   readonly instance: SensorInstance;
 }
 
@@ -76,14 +78,19 @@ export const CreatureBrainComponent = defineComponent<CreatureBrainData>(
   'CreatureBrain',
 );
 
+const EMPTY_TAG_SET: ReadonlySet<string> = new Set<string>();
+
 /**
  * Executes one complete deterministic nervous-system tick for every living animal in `world`:
- * 1. Samples all sensors (writing into `bus.next`).
+ * 1. Samples mounted sensors according to their declared `sampleRateHz` (writing into `bus.next`;
+ *    analog channels automatically hold their value across skipped sub-ticks).
  * 2. Ticks all brain modules (reading `bus.current`, writing `bus.next`).
  * 3. Ticks the species spine (reading `bus.current`, writing `bus.next`).
  * 4. Applies all actuators (reading `bus.current`, applying forces/torques, queueing energy costs,
  *    collecting discrete {@link ActuatorActionEvent}s such as bites).
  * 5. Swaps each animal's double-buffered `SignalBus` and emits body scent.
+ *
+ * Uses reusable per-tick context objects to minimize GC allocations in the hot loop (Section 7).
  *
  * @returns All discrete actuator action events emitted during this tick (pass to `stepInteractionSystem`).
  */
@@ -100,8 +107,107 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
     TransformComponent,
     PhysicsBodyComponent,
   );
+  if (creatures.length === 0) return events;
 
-  for (const entity of creatures) {
+  // Reusable mutable context state shared across entities during this tick (zero per-creature closures).
+  const initialEntity = creatures[0] as EntityId;
+  let currentRootBody = 0 as BodyHandle;
+  let currentTargetBody = 0 as BodyHandle;
+  let currentEnergy: EnergyData | undefined;
+  const sensorPos = { x: 0, y: 0 };
+  const actuatorPos = { x: 0, y: 0 };
+  const bodyState = { energyRatio: 1, healthRatio: 1, painPulse: 0 };
+  const neighborBuffer: NeighborObservation[] = [];
+
+  const sensorCtx: {
+    entityId: EntityId;
+    position: Vec2;
+    angle: number;
+    bodyState: { energyRatio: number; healthRatio: number; painPulse: number };
+    queryNeighbors: SensorContext['queryNeighbors'];
+    sampleField: SensorContext['sampleField'];
+    castRay: SensorContext['castRay'];
+  } = {
+    entityId: initialEntity,
+    position: sensorPos,
+    angle: 0,
+    bodyState,
+    queryNeighbors(origin, radiusMeters): readonly NeighborObservation[] {
+      const ids = world.spatialHash.queryRadius(origin.x, origin.y, radiusMeters);
+      neighborBuffer.length = 0;
+      const ecs = world.ecs;
+      for (let k = 0; k < ids.length; k += 1) {
+        const otherId = ids[k] as EntityId;
+        const oTransform = ecs.getComponent(otherId, TransformComponent);
+        if (oTransform === undefined) continue;
+        const oBody = ecs.getComponent(otherId, PhysicsBodyComponent);
+        const oTags = ecs.getComponent(otherId, TagsComponent);
+        const oBrain = ecs.getComponent(otherId, CreatureBrainComponent);
+        neighborBuffer.push({
+          entityId: otherId,
+          position: oTransform,
+          radius: oBody?.boundingRadius ?? 0.1,
+          tags: oTags?.values ?? EMPTY_TAG_SET,
+          ...(oBrain?.appearanceFeatures !== undefined
+            ? { appearanceFeatures: oBrain.appearanceFeatures }
+            : {}),
+        });
+      }
+      return neighborBuffer;
+    },
+    sampleField(fieldName, x, y) {
+      return world.fields.has(fieldName) ? world.fields.get(fieldName).sampleBilinear(x, y) : 0;
+    },
+    castRay(origin, direction, maxDistance) {
+      const hit = world.physics.castRay(origin, direction, maxDistance, currentRootBody);
+      if (hit === null) return null;
+      return {
+        entityId: world.getEntityByBody(hit.body) ?? null,
+        distance: hit.toi,
+      };
+    },
+  };
+
+  const actuatorCtx: {
+    entityId: EntityId;
+    worldPosition: Vec2;
+    worldAngle: number;
+    applyForce: ActuatorContext['applyForce'];
+    applyImpulse: ActuatorContext['applyImpulse'];
+    applyTorque: ActuatorContext['applyTorque'];
+    emitField: ActuatorContext['emitField'];
+    consumeEnergy: ActuatorContext['consumeEnergy'];
+    emitAction: ActuatorContext['emitAction'];
+  } = {
+    entityId: initialEntity,
+    worldPosition: actuatorPos,
+    worldAngle: 0,
+    applyForce(force, atWorldPoint) {
+      world.physics.applyForce(currentTargetBody, force, atWorldPoint ?? actuatorPos);
+    },
+    applyImpulse(impulse, atWorldPoint) {
+      world.physics.applyImpulse(currentTargetBody, impulse, atWorldPoint ?? actuatorPos);
+    },
+    applyTorque(torque) {
+      world.physics.applyTorque(currentTargetBody, torque);
+    },
+    emitField(fieldName, x, y, delta) {
+      if (world.fields.has(fieldName)) {
+        world.fields.get(fieldName).addAtWorld(x, y, delta);
+      }
+    },
+    consumeEnergy(energyUnits) {
+      if (currentEnergy !== undefined && energyUnits > 0) {
+        currentEnergy.pendingActuatorCost += energyUnits;
+      }
+    },
+    emitAction(event) {
+      events.push(event);
+    },
+  };
+
+  for (let c = 0; c < creatures.length; c += 1) {
+    const entity = creatures[c] as EntityId;
     const health = world.ecs.getComponent(entity, HealthComponent);
     if (health !== undefined && health.dead) continue;
 
@@ -110,19 +216,24 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
     const body = world.ecs.requireComponent(entity, PhysicsBodyComponent);
     const energy = world.ecs.getComponent(entity, EnergyComponent);
 
-    const energyRatio =
+    currentRootBody = body.bodyHandle;
+    currentEnergy = energy;
+    sensorCtx.entityId = entity;
+    actuatorCtx.entityId = entity;
+
+    bodyState.energyRatio =
       energy !== undefined && energy.max > 0 ? clamp(energy.current / energy.max, 0, 1) : 1;
-    const healthRatio =
+    bodyState.healthRatio =
       health !== undefined && health.max > 0 ? clamp(health.current / health.max, 0, 1) : 1;
-    const painPulse = health !== undefined ? clamp(health.recentPainPulse, 0, 1) : 0;
+    bodyState.painPulse = health !== undefined ? clamp(health.recentPainPulse, 0, 1) : 0;
 
     const read = brain.bus.reader;
     const write = brain.bus.writer;
 
     // Publish short-lived ADR 0010 neuromodulator pulses (reward / aversive) into subscribed channels
     if (brain.neuromodulators !== undefined) {
-      if (painPulse > 0 && painPulse > brain.neuromodulators.aversive) {
-        brain.neuromodulators.aversive = painPulse;
+      if (bodyState.painPulse > 0 && bodyState.painPulse > brain.neuromodulators.aversive) {
+        brain.neuromodulators.aversive = bodyState.painPulse;
       }
       if (brain.modulatorHandles?.reward !== undefined) {
         write.set(brain.modulatorHandles.reward, brain.neuromodulators.reward);
@@ -133,60 +244,37 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
       decayNeuromodulators(brain.neuromodulators, dt);
     }
 
-    // 1. Sample mounted sensors
-    const rootPos: Vec2 = { x: transform.x, y: transform.y };
+    const cosA = Math.cos(transform.angle);
+    const sinA = Math.sin(transform.angle);
+
+    // 1. Sample mounted sensors (respecting declared sampleRateHz with deterministic per-entity staggering)
     for (let i = 0; i < brain.sensors.length; i += 1) {
       const mounted = brain.sensors[i] as MountedSensorRuntime;
-      const worldPos = add(rootPos, rotate(mounted.localPosition, transform.angle));
-      const worldAngle = transform.angle + mounted.localAngle;
+      if (mounted.sampleRateHz !== undefined && mounted.sampleRateHz > 0) {
+        const cooldown = mounted.sampleCooldownSeconds ?? 0;
+        if (cooldown > 1e-9) {
+          mounted.sampleCooldownSeconds = cooldown - dt;
+          continue;
+        }
+        const period = 1 / mounted.sampleRateHz;
+        if (!mounted.sampledOnce) {
+          mounted.sampledOnce = true;
+          const phaseTicks = Math.max(1, Math.round(period / dt));
+          mounted.sampleCooldownSeconds = Math.max(0, (entity % phaseTicks) * dt);
+        } else {
+          mounted.sampleCooldownSeconds = Math.max(0, period - dt);
+        }
+      }
 
-      mounted.instance.sample(
-        {
-          entityId: entity,
-          position: worldPos,
-          angle: worldAngle,
-          bodyState: { energyRatio, healthRatio, painPulse },
-          queryNeighbors(origin, radiusMeters): readonly NeighborObservation[] {
-            const ids = world.spatialHash.queryRadius(origin.x, origin.y, radiusMeters);
-            const result: NeighborObservation[] = [];
-            for (const otherId of ids) {
-              if (!world.ecs.isAlive(otherId)) continue;
-              const oTransform = world.ecs.getComponent(otherId, TransformComponent);
-              if (oTransform === undefined) continue;
-              const oBody = world.ecs.getComponent(otherId, PhysicsBodyComponent);
-              const oTags = world.ecs.getComponent(otherId, TagsComponent);
-              const oBrain = world.ecs.getComponent(otherId, CreatureBrainComponent);
-              result.push({
-                entityId: otherId,
-                position: { x: oTransform.x, y: oTransform.y },
-                radius: oBody?.boundingRadius ?? 0.1,
-                tags: oTags?.values ?? new Set<string>(),
-                ...(oBrain?.appearanceFeatures !== undefined
-                  ? { appearanceFeatures: oBrain.appearanceFeatures }
-                  : {}),
-              });
-            }
-            return result;
-          },
-          sampleField(fieldName, x, y) {
-            return world.fields.has(fieldName)
-              ? world.fields.get(fieldName).sampleBilinear(x, y)
-              : 0;
-          },
-          castRay(origin, direction, maxDistance) {
-            const hit = world.physics.castRay(origin, direction, maxDistance, body.bodyHandle);
-            if (hit === null) return null;
-            return {
-              entityId: world.getEntityByBody(hit.body) ?? null,
-              distance: hit.toi,
-            };
-          },
-        },
-        write,
-      );
+      const lx = mounted.localPosition.x;
+      const ly = mounted.localPosition.y;
+      sensorPos.x = transform.x + lx * cosA - ly * sinA;
+      sensorPos.y = transform.y + lx * sinA + ly * cosA;
+      sensorCtx.angle = transform.angle + mounted.localAngle;
+      mounted.instance.sample(sensorCtx, write);
     }
 
-    // 2. Tick brain modules
+    // 2. Tick brain modules (every tick so 1-tick inter-module pulse chains never drop)
     for (let i = 0; i < brain.brainModules.length; i += 1) {
       const mod = brain.brainModules[i] as (typeof brain.brainModules)[number];
       mod.instance.tick(read, write, dt);
@@ -198,40 +286,13 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
     // 4. Apply actuators
     for (let i = 0; i < brain.actuators.length; i += 1) {
       const act = brain.actuators[i] as MountedActuatorRuntime;
-      const worldPos = add(rootPos, rotate(act.localPosition, transform.angle));
-      const worldAngle = transform.angle + act.localAngle;
-
-      act.instance.apply(
-        {
-          entityId: entity,
-          worldPosition: worldPos,
-          worldAngle,
-          applyForce(force, atWorldPoint) {
-            world.physics.applyForce(act.targetBody, force, atWorldPoint ?? worldPos);
-          },
-          applyImpulse(impulse, atWorldPoint) {
-            world.physics.applyImpulse(act.targetBody, impulse, atWorldPoint ?? worldPos);
-          },
-          applyTorque(torque) {
-            world.physics.applyTorque(act.targetBody, torque);
-          },
-          emitField(fieldName, x, y, delta) {
-            if (world.fields.has(fieldName)) {
-              world.fields.get(fieldName).addAtWorld(x, y, delta);
-            }
-          },
-          consumeEnergy(energyUnits) {
-            if (energy !== undefined && energyUnits > 0) {
-              energy.pendingActuatorCost += energyUnits;
-            }
-          },
-          emitAction(event) {
-            events.push(event);
-          },
-        },
-        read,
-        dt,
-      );
+      currentTargetBody = act.targetBody;
+      const lx = act.localPosition.x;
+      const ly = act.localPosition.y;
+      actuatorPos.x = transform.x + lx * cosA - ly * sinA;
+      actuatorPos.y = transform.y + lx * sinA + ly * cosA;
+      actuatorCtx.worldAngle = transform.angle + act.localAngle;
+      act.instance.apply(actuatorCtx, read, dt);
     }
 
     // 5. Emit body scent and swap double-buffered SignalBus

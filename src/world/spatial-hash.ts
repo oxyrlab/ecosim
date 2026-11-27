@@ -2,26 +2,37 @@ import { assertFiniteNumber, InvalidParameterError, type EntityId } from '@core/
 
 interface SpatialEntry {
   readonly entity: EntityId;
-  readonly x: number;
-  readonly y: number;
-  readonly radius: number;
-  readonly minCx: number;
-  readonly maxCx: number;
-  readonly minCy: number;
-  readonly maxCy: number;
+  x: number;
+  y: number;
+  radius: number;
+  minCx: number;
+  maxCx: number;
+  minCy: number;
+  maxCy: number;
+  lastQueryStamp: number;
+}
+
+const CELL_OFFSET = 0x100000;
+const CELL_STRIDE = 0x200000;
+
+function packCellKey(cx: number, cy: number): number {
+  return (cx + CELL_OFFSET) * CELL_STRIDE + (cy + CELL_OFFSET);
 }
 
 /**
  * Uniform-grid spatial index for fast radius and AABB neighbor queries in SI meters,
- * independent of Rapier. All query methods return entities in deterministic ascending
- * {@link EntityId} order.
+ * independent of Rapier. Uses integer-packed cell keys, direct entry buckets, in-place
+ * same-cell updates, and monotonic query stamps for zero-allocation deduplication.
+ * All query methods return entities in deterministic ascending {@link EntityId} order.
  */
 export class SpatialHash {
   /** Cell edge length in meters. */
   public readonly cellSizeMeters: number;
 
+  private readonly invCellSize: number;
   private readonly entries = new Map<EntityId, SpatialEntry>();
-  private readonly cells = new Map<string, Set<EntityId>>();
+  private readonly cells = new Map<number, SpatialEntry[]>();
+  private queryStamp = 0;
 
   /**
    * Creates a {@link SpatialHash}.
@@ -39,6 +50,7 @@ export class SpatialHash {
       );
     }
     this.cellSizeMeters = cellSizeMeters;
+    this.invCellSize = 1 / cellSizeMeters;
   }
 
   /** Number of currently indexed entities. */
@@ -61,29 +73,51 @@ export class SpatialHash {
       );
     }
 
-    if (this.entries.has(entity)) {
-      this.remove(entity);
-    }
+    const inv = this.invCellSize;
+    const minCx = Math.floor((x - radius) * inv);
+    const maxCx = Math.floor((x + radius) * inv);
+    const minCy = Math.floor((y - radius) * inv);
+    const maxCy = Math.floor((y + radius) * inv);
 
-    const minCx = Math.floor((x - radius) / this.cellSizeMeters);
-    const maxCx = Math.floor((x + radius) / this.cellSizeMeters);
-    const minCy = Math.floor((y - radius) / this.cellSizeMeters);
-    const maxCy = Math.floor((y + radius) / this.cellSizeMeters);
-
-    const entry: SpatialEntry = { entity, x, y, radius, minCx, maxCx, minCy, maxCy };
-    this.entries.set(entity, entry);
-
-    for (let cy = minCy; cy <= maxCy; cy += 1) {
-      for (let cx = minCx; cx <= maxCx; cx += 1) {
-        const key = `${cx},${cy}`;
-        let bucket = this.cells.get(key);
-        if (bucket === undefined) {
-          bucket = new Set<EntityId>();
-          this.cells.set(key, bucket);
-        }
-        bucket.add(entity);
+    const existing = this.entries.get(entity);
+    if (existing !== undefined) {
+      // Fast path: entity remained inside the exact same grid cell range.
+      if (
+        existing.minCx === minCx &&
+        existing.maxCx === maxCx &&
+        existing.minCy === minCy &&
+        existing.maxCy === maxCy
+      ) {
+        existing.x = x;
+        existing.y = y;
+        existing.radius = radius;
+        return;
       }
+      this.removeFromCells(existing);
+      existing.x = x;
+      existing.y = y;
+      existing.radius = radius;
+      existing.minCx = minCx;
+      existing.maxCx = maxCx;
+      existing.minCy = minCy;
+      existing.maxCy = maxCy;
+      this.addToCells(existing);
+      return;
     }
+
+    const entry: SpatialEntry = {
+      entity,
+      x,
+      y,
+      radius,
+      minCx,
+      maxCx,
+      minCy,
+      maxCy,
+      lastQueryStamp: 0,
+    };
+    this.entries.set(entity, entry);
+    this.addToCells(entry);
   }
 
   /**
@@ -100,18 +134,7 @@ export class SpatialHash {
     const entry = this.entries.get(entity);
     if (entry === undefined) return;
     this.entries.delete(entity);
-
-    for (let cy = entry.minCy; cy <= entry.maxCy; cy += 1) {
-      for (let cx = entry.minCx; cx <= entry.maxCx; cx += 1) {
-        const key = `${cx},${cy}`;
-        const bucket = this.cells.get(key);
-        if (bucket === undefined) continue;
-        bucket.delete(entity);
-        if (bucket.size === 0) {
-          this.cells.delete(key);
-        }
-      }
-    }
+    this.removeFromCells(entry);
   }
 
   /**
@@ -130,37 +153,44 @@ export class SpatialHash {
       );
     }
 
-    // Pad cell bounds slightly so subnormal/floating-point boundary queries still inspect adjacent cells.
+    const inv = this.invCellSize;
     const padX = radiusMeters + Math.max(1e-9, Math.abs(x) * 1e-12);
     const padY = radiusMeters + Math.max(1e-9, Math.abs(y) * 1e-12);
-    const minCx = Math.floor((x - padX) / this.cellSizeMeters);
-    const maxCx = Math.floor((x + padX) / this.cellSizeMeters);
-    const minCy = Math.floor((y - padY) / this.cellSizeMeters);
-    const maxCy = Math.floor((y + padY) / this.cellSizeMeters);
+    const minCx = Math.floor((x - padX) * inv);
+    const maxCx = Math.floor((x + padX) * inv);
+    const minCy = Math.floor((y - padY) * inv);
+    const maxCy = Math.floor((y + padY) * inv);
 
-    const seen = new Set<EntityId>();
+    const stamp = this.nextQueryStamp();
     const results: EntityId[] = [];
+    let prevId = -1;
+    let needsSort = false;
 
     for (let cy = minCy; cy <= maxCy; cy += 1) {
+      const yPart = cy + CELL_OFFSET;
       for (let cx = minCx; cx <= maxCx; cx += 1) {
-        const bucket = this.cells.get(`${cx},${cy}`);
+        const bucket = this.cells.get((cx + CELL_OFFSET) * CELL_STRIDE + yPart);
         if (bucket === undefined) continue;
-        for (const entity of bucket) {
-          if (seen.has(entity)) continue;
-          seen.add(entity);
-          const entry = this.entries.get(entity);
-          if (entry === undefined) continue;
+        for (let i = 0; i < bucket.length; i += 1) {
+          const entry = bucket[i] as SpatialEntry;
+          if (entry.lastQueryStamp === stamp) continue;
+          entry.lastQueryStamp = stamp;
           const dx = entry.x - x;
           const dy = entry.y - y;
           const maxDist = radiusMeters + entry.radius;
           if (dx * dx + dy * dy <= maxDist * maxDist) {
-            results.push(entity);
+            const id = entry.entity;
+            if (id < prevId) needsSort = true;
+            prevId = id;
+            results.push(id);
           }
         }
       }
     }
 
-    results.sort((a, b) => a - b);
+    if (needsSort) {
+      results.sort((a, b) => a - b);
+    }
     return results;
   }
 
@@ -182,36 +212,44 @@ export class SpatialHash {
       );
     }
 
-    const minCx = Math.floor(minX / this.cellSizeMeters);
-    const maxCx = Math.floor(maxX / this.cellSizeMeters);
-    const minCy = Math.floor(minY / this.cellSizeMeters);
-    const maxCy = Math.floor(maxY / this.cellSizeMeters);
+    const inv = this.invCellSize;
+    const minCx = Math.floor(minX * inv);
+    const maxCx = Math.floor(maxX * inv);
+    const minCy = Math.floor(minY * inv);
+    const maxCy = Math.floor(maxY * inv);
 
-    const seen = new Set<EntityId>();
+    const stamp = this.nextQueryStamp();
     const results: EntityId[] = [];
+    let prevId = -1;
+    let needsSort = false;
 
     for (let cy = minCy; cy <= maxCy; cy += 1) {
+      const yPart = cy + CELL_OFFSET;
       for (let cx = minCx; cx <= maxCx; cx += 1) {
-        const bucket = this.cells.get(`${cx},${cy}`);
+        const bucket = this.cells.get((cx + CELL_OFFSET) * CELL_STRIDE + yPart);
         if (bucket === undefined) continue;
-        for (const entity of bucket) {
-          if (seen.has(entity)) continue;
-          seen.add(entity);
-          const entry = this.entries.get(entity);
-          if (entry === undefined) continue;
+        for (let i = 0; i < bucket.length; i += 1) {
+          const entry = bucket[i] as SpatialEntry;
+          if (entry.lastQueryStamp === stamp) continue;
+          entry.lastQueryStamp = stamp;
           if (
             entry.x + entry.radius >= minX &&
             entry.x - entry.radius <= maxX &&
             entry.y + entry.radius >= minY &&
             entry.y - entry.radius <= maxY
           ) {
-            results.push(entity);
+            const id = entry.entity;
+            if (id < prevId) needsSort = true;
+            prevId = id;
+            results.push(id);
           }
         }
       }
     }
 
-    results.sort((a, b) => a - b);
+    if (needsSort) {
+      results.sort((a, b) => a - b);
+    }
     return results;
   }
 
@@ -219,5 +257,51 @@ export class SpatialHash {
   public clear(): void {
     this.entries.clear();
     this.cells.clear();
+    this.queryStamp = 0;
+  }
+
+  private nextQueryStamp(): number {
+    this.queryStamp += 1;
+    if (this.queryStamp >= 0x7fffffff) {
+      this.queryStamp = 1;
+      for (const entry of this.entries.values()) {
+        entry.lastQueryStamp = 0;
+      }
+    }
+    return this.queryStamp;
+  }
+
+  private addToCells(entry: SpatialEntry): void {
+    for (let cy = entry.minCy; cy <= entry.maxCy; cy += 1) {
+      for (let cx = entry.minCx; cx <= entry.maxCx; cx += 1) {
+        const key = packCellKey(cx, cy);
+        let bucket = this.cells.get(key);
+        if (bucket === undefined) {
+          bucket = [];
+          this.cells.set(key, bucket);
+        }
+        bucket.push(entry);
+      }
+    }
+  }
+
+  private removeFromCells(entry: SpatialEntry): void {
+    for (let cy = entry.minCy; cy <= entry.maxCy; cy += 1) {
+      for (let cx = entry.minCx; cx <= entry.maxCx; cx += 1) {
+        const key = packCellKey(cx, cy);
+        const bucket = this.cells.get(key);
+        if (bucket === undefined) continue;
+        const idx = bucket.indexOf(entry);
+        if (idx !== -1) {
+          const last = bucket.pop() as SpatialEntry;
+          if (idx < bucket.length) {
+            bucket[idx] = last;
+          }
+        }
+        if (bucket.length === 0) {
+          this.cells.delete(key);
+        }
+      }
+    }
   }
 }

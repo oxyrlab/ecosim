@@ -13,6 +13,7 @@ In-house learning algorithms and compact neural networks are supplied by `@oxyrl
 ## Start Here
 
 - [Current Status & Next Task](STATUS.md)
+- [Milestone 2 Handoff & Baseline](MILESTONE-2.md)
 - [Glossary](glossary.md)
 - [Changelog](CHANGELOG.md)
 - [ADR Index](#architecture-decision-records)

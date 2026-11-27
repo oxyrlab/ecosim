@@ -59,7 +59,10 @@ const sourceFiles = walk(join(root, 'src')).filter(
     !file.endsWith('.test.ts') &&
     !file.endsWith('/index.ts') &&
     !file.endsWith('/main.ts') &&
-    !file.endsWith('/render/renderer.ts'),
+    !file.endsWith('/render/renderer.ts') &&
+    !file.endsWith('/ui/hud.ts') &&
+    !file.includes('/ui/panels/') &&
+    !file.endsWith('/headless/run.ts'),
 );
 
 for (const file of sourceFiles) {

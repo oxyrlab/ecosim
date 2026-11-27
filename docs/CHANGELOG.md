@@ -4,6 +4,15 @@ All notable changes to EcoSim, including any changes to default Constraint Rule 
 
 ## [Unreleased]
 
+### Added — Phase 7 (Observation & Sandbox Tools)
+
+- Added `src/sim/scenario.ts` (Zod-validated `ScenarioConfig`, `createDefaultMeadowScenario`, `createEmptySandboxScenario`, JSON save/load, and deterministic tick-stamped command replay per [ADR 0009](adr/0009-deterministic-sandbox-commands.md)).
+- Added `src/sim/inspector.ts` (`inspectEntity`, `pickEntityAtWorldPos`) and `src/sim/stats.ts` (`collectSimulationStats`, `collectGenomeSummary`, `StatsHistory`, `statsHistoryToCsv`).
+- Upgraded `SimCommand` (`spawn-species`, `clear-world`), `Simulation` (full ecosystem loop, `EnergyLedger`, `FieldHeatmapSnapshot`, Scenario replay/export), and `SimWorkerApi` RPCs.
+- Added `src/render/heatmap.ts` and upgraded `EcoSimRenderer` with field heatmap overlays, entity selection rings, and brush drag mode.
+- Added modular Observation & Sandbox HUD (`src/ui/`: `sandbox-state.ts`, `chart-svg.ts`, `inspector-format.ts`, `hud.ts`, `hud.css`, and `panels/{playback-bar,sandbox-toolbar,inspector-panel,toolbar-a11y}.ts`) wired into `src/main.ts`.
+- Added headless CLI runner (`src/headless/runner.ts`, `src/headless/run.ts`, `npm run headless`) with JSON/CSV export, real Rapier integration tests (`tests/integration/sandbox-and-headless.test.ts`), 90% coverage thresholds for `src/ui/` and `src/headless/`, and `docs/guides/sandbox-and-headless.md`.
+
 ### Added — Phase 6 (Evolution and Learning)
 
 - Recorded [ADR 0010](adr/0010-learning-neuromodulators.md) (simple event-driven `hormone.reward` / `hormone.aversive` neuromodulators gating learning only).

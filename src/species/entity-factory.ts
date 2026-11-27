@@ -320,8 +320,9 @@ export function spawnSpeciesEntity(
     jointHandles: built.joints,
     boundingRadius: validated.boundingRadius,
   });
+  const renderKind = blueprint.id === 'rabbit' ? 10 : blueprint.id === 'fox' ? 11 : 1;
   world.ecs.addComponent(entity, RenderableStubComponent, {
-    kind: 1,
+    kind: renderKind,
     radius: validated.boundingRadius,
     color: blueprint.stubColor,
   });
@@ -340,6 +341,8 @@ export function spawnSpeciesEntity(
       instanceId: s.instanceId,
       localPosition: s.localPosition,
       localAngle: s.localAngle,
+      ...(def.sampleRateHz !== undefined ? { sampleRateHz: def.sampleRateHz } : {}),
+      sampleCooldownSeconds: 0,
       instance: def.create(s.params, { outputs: handles.outputs }),
     };
   });

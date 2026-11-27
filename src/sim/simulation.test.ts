@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createEntityId, InvalidParameterError } from '@core/index';
+import { CorpseComponent } from '@life/index';
 import { createMockPhysicsAdapter } from '@physics/mock-adapter';
+import { FruitComponent } from '@plants/index';
+import { BERRY_BUSH_BLUEPRINT } from '@species/index';
 import { TransformComponent } from '@world/index';
+import { createDefaultMeadowScenario, createEmptySandboxScenario } from './scenario';
 import { Simulation } from './simulation';
 
 describe('Simulation', () => {
@@ -66,24 +70,94 @@ describe('Simulation', () => {
     sim.free();
   });
 
+  it('supports spawn-species, clear-world, heatmap snapshots, inspection, and scenario export/replay', () => {
+    const scenario = createEmptySandboxScenario(33);
+    const sim = new Simulation(
+      { world: scenario.world, scenario, statsIntervalTicks: 2 },
+      createMockPhysicsAdapter(),
+    );
+
+    sim.enqueueCommand({
+      type: 'spawn-species',
+      speciesId: 'rabbit',
+      position: { x: 10, y: 10 },
+      angle: 0.25,
+    });
+    sim.enqueueCommand({
+      type: 'spawn-species',
+      speciesId: 'grass',
+      position: { x: 14, y: 14 },
+      plantStage: 'mature',
+    });
+    sim.stepFixed();
+    sim.stepFixed();
+
+    const stats = sim.getStats();
+    expect(stats.animalCount).toBe(1);
+    expect(stats.plantCount).toBe(1);
+    expect(sim.getStatsHistory().length).toBeGreaterThanOrEqual(2);
+    expect(sim.getGenomeSummary()).toHaveLength(1);
+
+    const picked = sim.pickEntity({ x: 10, y: 10 });
+    expect(picked).not.toBeNull();
+    if (picked !== null) {
+      expect(sim.inspectEntity(picked)?.speciesId).toBe('rabbit');
+    }
+
+    const heat = sim.getFieldHeatmap('soil.nutrients');
+    expect(heat.cols).toBe(40);
+    expect(heat.maxValue).toBeGreaterThan(0);
+
+    const exported = sim.exportScenario();
+    expect(exported.commands).toHaveLength(2);
+
+    // Replay exported scenario and confirm bit-exact hash at tick 2
+    const replay = new Simulation(
+      { world: exported.world, scenario: exported, statsIntervalTicks: 2 },
+      createMockPhysicsAdapter(),
+    );
+    replay.stepFixed();
+    replay.stepFixed();
+    expect(replay.computeStateHash()).toBe(sim.computeStateHash());
+
+    // Cover fruit & corpse hashing paths too
+    const fruitId = sim.world.spawnSimpleBody({ position: { x: 4, y: 4 }, radius: 0.2 });
+    sim.world.ecs.addComponent(fruitId, FruitComponent, {
+      speciesId: 'berry-bush',
+      spec: BERRY_BUSH_BLUEPRINT.plantSpec,
+      ageSeconds: 1,
+      maxAgeSeconds: 20,
+      seedEnergy: 3,
+      scentRatePerSecond: 1,
+      germinationProbability: 0.5,
+      dispersalDelaySeconds: 4,
+      eatenBy: null,
+    });
+    const corpseId = sim.world.spawnSimpleBody({ position: { x: 5, y: 5 }, radius: 0.3 });
+    sim.world.ecs.addComponent(corpseId, CorpseComponent, {
+      energy: 12,
+      initialEnergy: 20,
+      decayRatePerSecond: 1,
+      scentRatePerSecond: 1,
+      radius: 0.3,
+    });
+    expect(sim.computeStateHash()).toBeGreaterThanOrEqual(0);
+
+    sim.enqueueCommand({ type: 'clear-world' });
+    sim.stepFixed();
+    expect(sim.getStats().totalEntities).toBe(0);
+
+    sim.free();
+    replay.free();
+  });
+
   it('produces identical state hashes across two runs with the same seed and commands', () => {
     const run = () => {
-      const sim = new Simulation({ world: baseWorld }, createMockPhysicsAdapter());
-      sim.enqueueCommand({
-        type: 'spawn-body',
-        position: { x: 4, y: 6 },
-        radius: 0.4,
-        linearVelocity: { x: 1.5, y: -0.5 },
-      });
-      sim.enqueueCommand({
-        type: 'paint-field',
-        fieldName: 'scent.prey',
-        x: 6,
-        y: 6,
-        radiusMeters: 1.5,
-        value: 3,
-      });
-      for (let i = 0; i < 18; i += 1) {
+      const sim = new Simulation(
+        { world: baseWorld, scenario: createDefaultMeadowScenario(15) },
+        createMockPhysicsAdapter(),
+      );
+      for (let i = 0; i < 6; i += 1) {
         sim.stepFixed();
       }
       const hash = sim.computeStateHash();
@@ -113,9 +187,20 @@ describe('Simulation', () => {
       () =>
         new Simulation({ world: baseWorld, maxSubStepsPerAdvance: 0 }, createMockPhysicsAdapter()),
     ).toThrow(InvalidParameterError);
+    expect(
+      () => new Simulation({ world: baseWorld, statsIntervalTicks: 0 }, createMockPhysicsAdapter()),
+    ).toThrow(InvalidParameterError);
 
-    const sim = new Simulation({ world: baseWorld }, createMockPhysicsAdapter());
+    const sim = new Simulation(
+      { world: baseWorld, enableReproduction: false },
+      createMockPhysicsAdapter(),
+    );
+    sim.enqueueCommand({ type: 'spawn-species', speciesId: 'rabbit', position: { x: 5, y: 5 } });
+    sim.enqueueCommand({ type: 'spawn-species', speciesId: 'grass', position: { x: 8, y: 8 } });
+    sim.stepFixed();
+    expect(sim.getStats().animalCount).toBe(1);
     expect(() => sim.advance(-0.1)).toThrow(InvalidParameterError);
+    expect(sim.exportScenario().name).toBe('custom-session');
     sim.free();
   });
 });

@@ -20,6 +20,9 @@ export default defineConfig({
         'src/appearance/types.ts',
         'src/physics/types.ts',
         'src/render/renderer.ts',
+        'src/ui/hud.ts',
+        'src/ui/panels/**/*.ts',
+        'src/headless/run.ts',
       ],
       reporter: ['text', 'lcov'],
       thresholds: {
@@ -106,6 +109,18 @@ export default defineConfig({
           statements: 90,
         },
         'src/genome/**/*.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'src/ui/**/*.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'src/headless/**/*.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

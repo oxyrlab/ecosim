@@ -30,6 +30,7 @@ function resizePlantCollider(
     colliderHandles: [nextCollider],
     jointHandles: body.jointHandles,
     boundingRadius: newRadius,
+    isFixed: body.isFixed ?? true,
   });
   world.spatialHash.update(entity, x, y, newRadius);
 }

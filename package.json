@@ -21,7 +21,8 @@
     "format:check": "prettier --check .",
     "docs:catalog": "tsx scripts/gen-catalog.ts",
     "docs:check": "tsx scripts/check-docs.ts",
-    "headless": "tsx src/headless/run.ts"
+    "headless": "tsx src/headless/run.ts",
+    "bench": "tsx scripts/bench-scale.ts"
   },
   "dependencies": {
     "@dimforge/rapier2d-deterministic-compat": "^0.21.0",

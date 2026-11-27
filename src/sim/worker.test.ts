@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { InvariantViolationError } from '@core/index';
+import { createEmptySandboxScenario } from './scenario';
 import { readSnapshotEntity } from './snapshot';
 import { createSimWorkerController } from './worker';
 
 describe('SimWorkerController', () => {
-  it('initializes Rapier, executes queued commands, advances, and disposes cleanly', async () => {
+  it('initializes Rapier, executes queued commands, inspects entities, exports scenarios, and disposes cleanly', async () => {
     const controller = createSimWorkerController(false);
     expect(() => controller.getSnapshot()).toThrow(InvariantViolationError);
 
@@ -35,13 +36,44 @@ describe('SimWorkerController', () => {
     expect(controller.getCommandHistory()).toHaveLength(1);
     expect(controller.computeStateHash()).toBeGreaterThanOrEqual(0);
     expect(controller.getSnapshot().tick).toBe(7);
+    expect(controller.listSpecies().length).toBeGreaterThanOrEqual(4);
+    expect(controller.listFields()).toContain('soil.nutrients');
 
-    // Default transfer mode also wraps snapshots cleanly
+    // Scenario loading, species spawning, picking, inspection, heatmap, and export
+    const scenario = createEmptySandboxScenario(21);
+    const loaded = await controller.loadScenario(scenario);
+    expect(loaded.tick).toBe(0);
+    controller.enqueueCommand({
+      type: 'spawn-species',
+      speciesId: 'rabbit',
+      position: { x: 10, y: 10 },
+    });
+    controller.stepFixed(2);
+
+    expect(controller.getStats().animalCount).toBe(1);
+    expect(controller.getStatsHistory().length).toBeGreaterThanOrEqual(1);
+    const picked = controller.pickEntity({ x: 10, y: 10 });
+    expect(picked).not.toBeNull();
+    if (picked !== null) {
+      expect(controller.inspectEntity(picked)?.speciesId).toBe('rabbit');
+    }
+    const heatmap = controller.getFieldHeatmap('soil.nutrients');
+    expect(heatmap.cols).toBe(40);
+    expect(controller.exportScenario().commands).toHaveLength(1);
+
+    // Fresh controller calling loadScenario directly without prior init()
+    const freshController = createSimWorkerController(false);
+    const freshSnap = await freshController.loadScenario(scenario);
+    expect(freshSnap.tick).toBe(0);
+    freshController.dispose();
+
+    // Default transfer mode also wraps snapshots & heatmaps cleanly
     const transferring = createSimWorkerController();
     const tSnap = await transferring.init({
       world: { seed: 9, widthMeters: 10, heightMeters: 10, gridCols: 5, gridRows: 5 },
     });
     expect(tSnap.tick).toBe(0);
+    expect(transferring.getFieldHeatmap('light').cols).toBe(5);
     transferring.dispose();
 
     // Re-init disposes previous simulation safely

@@ -169,9 +169,10 @@ export class GridField {
    * Adds `delta` to the cell containing world point `(x, y)` in meters.
    */
   public addAtWorld(x: number, y: number, delta: number): void {
-    const cell = this.worldToCell(x, y);
-    if (cell === null) return;
-    this.addCell(cell.col, cell.row, delta);
+    const col = Math.floor(x / this.cellSizeMeters);
+    const row = Math.floor(y / this.cellSizeMeters);
+    if (col < 0 || col >= this.cols || row < 0 || row >= this.rows) return;
+    this.addCell(col, row, delta);
   }
 
   /**

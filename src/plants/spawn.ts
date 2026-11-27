@@ -165,7 +165,7 @@ export function spawnPlant(
           position: clampedPos,
           radius: morph.radius,
           bodyKind: 'fixed',
-          kind: 2,
+          kind: spec.speciesId === 'berry-bush' ? 4 : 2,
           color: morph.color,
           tags: ['plant', spec.speciesId, stage],
           collisionGroup: COLLISION_GROUP.PLANT,

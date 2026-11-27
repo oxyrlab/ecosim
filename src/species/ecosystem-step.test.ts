@@ -27,7 +27,7 @@ describe('ecosystem-step runner and state hash', () => {
       );
       const rabbit = spawnSpeciesEntity(world, RABBIT_BLUEPRINT, { x: 12, y: 12 }, { angle: 0 });
       world.ecs.requireComponent(rabbit, EnergyComponent).current = 15;
-      spawnSpeciesEntity(world, FOX_BLUEPRINT, { x: 16, y: 12 }, { angle: Math.PI });
+      spawnSpeciesEntity(world, FOX_BLUEPRINT, { x: 21, y: 12 }, { angle: Math.PI });
       const corpse = world.spawnSimpleBody({
         position: { x: 6, y: 6 },
         radius: 0.25,

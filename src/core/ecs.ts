@@ -260,6 +260,8 @@ export function createEcsWorld(): EcsWorld {
       if (primary === undefined) return [];
 
       const result: EntityId[] = [];
+      let prevId = -1;
+      let needsSort = false;
       for (const entity of primary.keys()) {
         let matchesAll = true;
         for (let i = 0; i < matchedStores.length; i += 1) {
@@ -271,12 +273,16 @@ export function createEcsWorld(): EcsWorld {
           }
         }
         if (matchesAll) {
+          if (entity < prevId) needsSort = true;
+          prevId = entity;
           result.push(entity);
         }
       }
 
       // Guarantee deterministic ascending EntityId order regardless of component attachment order.
-      result.sort((a, b) => a - b);
+      if (needsSort) {
+        result.sort((a, b) => a - b);
+      }
       return result;
     },
 

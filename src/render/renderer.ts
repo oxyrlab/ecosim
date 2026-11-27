@@ -1,9 +1,19 @@
-import { Application, Graphics } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, type Texture } from 'pixi.js';
+import type { PathCommand } from '@appearance/shapes';
+import type { ResolvedBodyLayout, ResolvedPart } from '@appearance/types';
 import type { Vec2 } from '@core/index';
 import type { FieldHeatmapSnapshot } from '@sim/simulation';
 import { SNAPSHOT_STRIDE, type RenderSnapshot } from '@sim/snapshot';
 import { Camera } from './camera';
 import { mapFieldValueToCellStyle } from './heatmap';
+import {
+  buildProceduralDrawParts,
+  getProceduralLayoutForKind,
+  RENDER_KIND,
+} from './species-shapes';
+import { AppearanceTextureCache } from './texture-cache';
+
+const TEXTURE_PIXELS_PER_METER = 64;
 
 /**
  * Pointer interaction mode for {@link EcoSimRenderer}.
@@ -26,9 +36,49 @@ export interface RendererOptions {
   readonly onWorldDrag?: (worldPosition: Vec2) => void;
 }
 
+function replayPathCommands(
+  g: Graphics,
+  commands: readonly PathCommand[],
+  ox: number,
+  oy: number,
+  angle: number,
+  ppm: number,
+): void {
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+  const tx = (x: number, y: number): number => (ox + x * cosA - y * sinA) * ppm;
+  const ty = (x: number, y: number): number => (oy + x * sinA + y * cosA) * ppm;
+
+  for (let i = 0; i < commands.length; i += 1) {
+    const cmd = commands[i] as PathCommand;
+    switch (cmd.kind) {
+      case 'moveTo':
+        g.moveTo(tx(cmd.x, cmd.y), ty(cmd.x, cmd.y));
+        break;
+      case 'lineTo':
+        g.lineTo(tx(cmd.x, cmd.y), ty(cmd.x, cmd.y));
+        break;
+      case 'arc':
+        g.arc(
+          tx(cmd.cx, cmd.cy),
+          ty(cmd.cx, cmd.cy),
+          cmd.radius * ppm,
+          cmd.startAngle + angle,
+          cmd.endAngle + angle,
+          false,
+        );
+        break;
+      case 'closePath':
+        g.closePath();
+        break;
+    }
+  }
+}
+
 /**
- * Main-thread PixiJS v8 renderer drawing world bounds, optional field heatmaps, visible entities
- * from Transferable {@link RenderSnapshot}s, and selected-entity highlights via {@link Camera}.
+ * Main-thread PixiJS v8 renderer drawing world bounds, optional field heatmaps, cached procedural
+ * species textures (`AppearanceTextureCache` + pooled `Sprite`s), plants/fruits, and selected-entity
+ * highlights with viewport culling via {@link Camera}.
  */
 export class EcoSimRenderer {
   /** Interactive 2D top-down viewport camera. */
@@ -38,6 +88,10 @@ export class EcoSimRenderer {
   private readonly backgroundGraphics: Graphics;
   private readonly heatmapGraphics: Graphics;
   private readonly entityGraphics: Graphics;
+  private readonly spriteLayer: Container;
+  private readonly overlayGraphics: Graphics;
+  private readonly spritePool: Sprite[] = [];
+  private readonly textureCache: AppearanceTextureCache<Texture>;
   private readonly container: HTMLElement;
   private readonly onWorldClick: ((worldPosition: Vec2) => void) | undefined;
   private readonly onWorldDrag: ((worldPosition: Vec2) => void) | undefined;
@@ -62,9 +116,19 @@ export class EcoSimRenderer {
     this.backgroundGraphics = new Graphics();
     this.heatmapGraphics = new Graphics();
     this.entityGraphics = new Graphics();
+    this.spriteLayer = new Container();
+    this.overlayGraphics = new Graphics();
+
     this.app.stage.addChild(this.backgroundGraphics);
     this.app.stage.addChild(this.heatmapGraphics);
     this.app.stage.addChild(this.entityGraphics);
+    this.app.stage.addChild(this.spriteLayer);
+    this.app.stage.addChild(this.overlayGraphics);
+
+    this.textureCache = new AppearanceTextureCache<Texture>(
+      (staticParts, layout) => this.bakeLayoutTexture(staticParts, layout),
+      (tex) => tex.destroy(true),
+    );
 
     const width = Math.max(1, container.clientWidth || window.innerWidth);
     const height = Math.max(1, container.clientHeight || window.innerHeight);
@@ -130,7 +194,8 @@ export class EcoSimRenderer {
   }
 
   /**
-   * Renders one {@link RenderSnapshot} plus any active heatmap overlay and selection highlight.
+   * Renders one {@link RenderSnapshot} plus any active heatmap overlay, cached procedural creature
+   * sprites, and selection highlight.
    *
    * @returns Number of entities drawn after viewport culling.
    */
@@ -155,16 +220,22 @@ export class EcoSimRenderer {
     // 2. Optional field heatmap layer
     this.renderHeatmap();
 
-    // 3. Entities + selection highlight
+    // 3. Entities (cached procedural sprites for animals + vector shapes for flora/objects)
     const g = this.entityGraphics;
+    const og = this.overlayGraphics;
     g.clear();
+    og.clear();
+
     const data = snapshot.entities;
     const ppm = this.camera.pixelsPerMeter;
+    const spriteScaleFactor = ppm / TEXTURE_PIXELS_PER_METER;
     let drawn = 0;
+    let spritesUsed = 0;
 
     for (let i = 0; i < snapshot.entityCount; i += 1) {
       const offset = i * SNAPSHOT_STRIDE;
       const id = data[offset] ?? 0;
+      const kind = Math.round(data[offset + 1] ?? 1);
       const x = data[offset + 2] ?? 0;
       const y = data[offset + 3] ?? 0;
       const angle = data[offset + 4] ?? 0;
@@ -175,20 +246,52 @@ export class EcoSimRenderer {
 
       const pos = this.camera.worldToScreen(x, y);
       const pxRadius = Math.max(2.5, radius * ppm);
-      g.circle(pos.x, pos.y, pxRadius);
-      g.fill({ color });
 
-      // Heading indicator line
-      g.moveTo(pos.x, pos.y);
-      g.lineTo(pos.x + Math.cos(angle) * pxRadius, pos.y + Math.sin(angle) * pxRadius);
-      g.stroke({ color: 0x0f172a, width: 1.5 });
+      const proceduralLayout = getProceduralLayoutForKind(kind);
+      if (proceduralLayout !== null) {
+        const baked = this.textureCache.getOrBake(proceduralLayout);
+        const sprite = this.acquireSprite(spritesUsed);
+        spritesUsed += 1;
+        sprite.texture = baked.texture;
+        sprite.visible = true;
+        sprite.position.set(pos.x, pos.y);
+        sprite.rotation = angle;
+        sprite.scale.set(spriteScaleFactor);
+      } else if (kind === RENDER_KIND.BUSH) {
+        // Multi-lobe berry bush canopy
+        g.circle(pos.x, pos.y, pxRadius);
+        g.fill({ color, alpha: 0.92 });
+        g.circle(pos.x - pxRadius * 0.35, pos.y - pxRadius * 0.25, pxRadius * 0.55);
+        g.circle(pos.x + pxRadius * 0.35, pos.y + pxRadius * 0.2, pxRadius * 0.52);
+        g.fill({ color: 0x16a34a, alpha: 0.75 });
+      } else if (kind === RENDER_KIND.PLANT) {
+        // Leafy grass rosette
+        g.circle(pos.x, pos.y, pxRadius);
+        g.fill({ color, alpha: 0.85 });
+        g.circle(pos.x, pos.y, pxRadius * 0.45);
+        g.fill({ color: 0x86efac, alpha: 0.65 });
+      } else {
+        g.circle(pos.x, pos.y, pxRadius);
+        g.fill({ color });
+        if (kind !== RENDER_KIND.FRUIT) {
+          g.moveTo(pos.x, pos.y);
+          g.lineTo(pos.x + Math.cos(angle) * pxRadius, pos.y + Math.sin(angle) * pxRadius);
+          g.stroke({ color: 0x0f172a, width: 1.5 });
+        }
+      }
 
       if (this.selectedEntityId !== null && Math.round(id) === this.selectedEntityId) {
-        g.circle(pos.x, pos.y, pxRadius + 5);
-        g.stroke({ color: 0xfacc15, width: 2.5 });
+        og.circle(pos.x, pos.y, pxRadius + 5);
+        og.stroke({ color: 0xfacc15, width: 2.5 });
       }
 
       drawn += 1;
+    }
+
+    // Hide unused pooled sprites without destroying them
+    for (let s = spritesUsed; s < this.spritePool.length; s += 1) {
+      const sprite = this.spritePool[s];
+      if (sprite !== undefined) sprite.visible = false;
     }
 
     return drawn;
@@ -202,7 +305,40 @@ export class EcoSimRenderer {
       cleanup();
     }
     this.cleanupListeners.length = 0;
+    this.textureCache.clear();
+    this.spritePool.length = 0;
     this.app.destroy(true);
+  }
+
+  private acquireSprite(index: number): Sprite {
+    const existing = this.spritePool[index];
+    if (existing !== undefined) return existing;
+    const created = new Sprite();
+    created.anchor.set(0.5);
+    this.spriteLayer.addChild(created);
+    this.spritePool.push(created);
+    return created;
+  }
+
+  private bakeLayoutTexture(
+    _staticParts: readonly ResolvedPart[],
+    layout: ResolvedBodyLayout,
+  ): Texture {
+    const g = new Graphics();
+    const parts = buildProceduralDrawParts(layout.parts);
+    for (const part of parts) {
+      replayPathCommands(g, part.commands, part.x, part.y, part.angle, TEXTURE_PIXELS_PER_METER);
+      g.fill({ color: part.fillColor });
+      if (part.strokeColor !== null && part.strokeWidth > 0) {
+        g.stroke({
+          color: part.strokeColor,
+          width: Math.max(1, part.strokeWidth * TEXTURE_PIXELS_PER_METER),
+        });
+      }
+    }
+    const texture = this.app.renderer.generateTexture({ target: g, antialias: true });
+    g.destroy();
+    return texture;
   }
 
   private renderHeatmap(): void {

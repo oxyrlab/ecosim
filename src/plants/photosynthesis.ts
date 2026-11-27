@@ -78,9 +78,10 @@ export function stepPhotosynthesisSystem(
     let nutrientTakenEu = 0;
 
     if (spec.nutrientFraction > 0) {
-      const cell = nutrientField.worldToCell(cx, cy);
-      if (cell === null) continue;
-      const availUnits = nutrientField.getCell(cell.col, cell.row);
+      const col = Math.floor(cx / nutrientField.cellSizeMeters);
+      const row = Math.floor(cy / nutrientField.cellSizeMeters);
+      if (col < 0 || col >= nutrientField.cols || row < 0 || row >= nutrientField.rows) continue;
+      const availUnits = nutrientField.getCell(col, row);
       const availEu = availUnits * nutrientEnergyPerUnit;
       const wantedNutrientEu = wantedGain * spec.nutrientFraction;
       nutrientTakenEu = Math.min(wantedNutrientEu, availEu);
@@ -88,8 +89,8 @@ export function stepPhotosynthesisSystem(
 
       actualGain = nutrientTakenEu / spec.nutrientFraction;
       nutrientField.setCell(
-        cell.col,
-        cell.row,
+        col,
+        row,
         Math.max(0, availUnits - nutrientTakenEu / nutrientEnergyPerUnit),
       );
     }

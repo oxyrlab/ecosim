@@ -4,6 +4,15 @@ All notable changes to EcoSim, including any changes to default Constraint Rule 
 
 ## [Unreleased]
 
+### Added & Optimized — Phase 8 (Optimization & Procedural Canvas Rendering)
+
+- Added target-scale & micro-benchmark runner (`scripts/bench-scale.ts`, `npm run bench`) and deterministic scale stress test (`tests/scenarios/scale-budget.test.ts`).
+- Optimized `SpatialHash` (`src/world/spatial-hash.ts`) with integer-packed cell keys, direct entry buckets, in-place same-cell updates, and monotonic `queryStamp` deduplication (`4.15 ms → 1.20 ms`, **3.46× faster**).
+- Added `PhysicsBodyData.isFixed` (`src/world/components.ts`, `src/world/world.ts`, `src/plants/lifecycle.ts`) to skip immovable plants/fruits in `syncFromPhysics()`, removed per-plant `{ col, row }` allocations in `GridField.addAtWorld` and `stepPhotosynthesisSystem`, and added an already-sorted fast path in `EcsWorld.query()` (`src/core/ecs.ts`).
+- Eliminated per-creature closures in `stepNervousSystem` (`src/species/creature-runtime.ts`) and enforced declared sensor `sampleRateHz` with deterministic per-entity staggering while keeping brain modules ticking every tick for lossless pulse propagation.
+- **Target-Scale Benchmark (500 animals + 500 plants + 100 objects, real Rapier WASM):** mean tick time dropped from **`18.86 ms`** (max `22.56 ms`) to **`8.00 ms`** (min `7.00 ms`, max `11.03 ms`), meeting the Section 7 `<= 8 ms` budget with all default Constraint Rules unchanged.
+- Connected procedural species layouts (`src/render/species-shapes.ts`) and `AppearanceTextureCache` + pooled PixiJS `Sprite`s to `EcoSimRenderer` (`src/render/renderer.ts`).
+
 ### Added — Phase 7 (Observation & Sandbox Tools)
 
 - Added `src/sim/scenario.ts` (Zod-validated `ScenarioConfig`, `createDefaultMeadowScenario`, `createEmptySandboxScenario`, JSON save/load, and deterministic tick-stamped command replay per [ADR 0009](adr/0009-deterministic-sandbox-commands.md)).

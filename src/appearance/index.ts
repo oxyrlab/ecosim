@@ -1,4 +1,5 @@
 export { colorGeneSchema, colorGeneToHex, type ColorGene } from './color';
+export { extractAppearanceFeatures, type AppearanceFeatures } from './features';
 export {
   computeConvexHull,
   computePointsBounds,

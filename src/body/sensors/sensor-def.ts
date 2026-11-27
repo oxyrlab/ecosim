@@ -1,3 +1,4 @@
+import type { AppearanceFeatures } from '@appearance/features';
 import type { PortHandleMap, PortMap, PortWriter } from '@bus/ports';
 import {
   assertKebabCaseId,
@@ -17,6 +18,8 @@ export interface NeighborObservation {
   readonly position: Vec2;
   readonly radius: number;
   readonly tags: ReadonlySet<string>;
+  /** Optional normalized appearance features for feature-based vision learning (Phase 6). */
+  readonly appearanceFeatures?: AppearanceFeatures;
 }
 
 /**

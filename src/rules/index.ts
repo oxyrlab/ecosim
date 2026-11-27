@@ -2,12 +2,16 @@ export { defineRule, registerRule, ruleRegistry } from './define-rule';
 export {
   BUILTIN_RULES,
   colliderConcaveStrategyRule,
+  learningMaxUpdatesPerSecondRule,
+  learningRateBoundsRule,
   maxAnimatedPartsRule,
   maxBrainModulesRule,
   maxBusChannelsRule,
   maxConvexVerticesRule,
   maxJointChainLengthRule,
+  maxLearnerStateSizeRule,
   maxMassRatioJointedRule,
+  maxMemorySlotsRule,
   maxPartsPerCreatureRule,
   maxRigidBodiesPerCreatureRule,
   maxSensorsPerCreatureRule,
@@ -18,6 +22,7 @@ export {
   unmergedFanInRule,
   unusedOutputRule,
   type BlueprintBodySubject,
+  type LearningRuntimeSubject,
 } from './defs';
 export { assertNoRuleErrors, evaluateRules, formatRuleReport } from './engine';
 export { resolveRules, type ResolveRulesOptions } from './resolve-rules';

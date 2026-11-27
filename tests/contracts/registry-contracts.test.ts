@@ -10,6 +10,7 @@ import { CAT_BODY_FIXTURE, CONCAVE_ARROW_BODY_FIXTURE } from '../fixtures/creatu
 import {
   runActuatorContract,
   runBrainModuleContract,
+  runLearningModuleContract,
   runOrganContract,
   runSensorContract,
   runSpineContract,
@@ -56,7 +57,7 @@ const VALID_NERVOUS_SUBJECT: BlueprintBodySubject = {
   },
 };
 
-const RULE_FIXTURES: Readonly<Record<string, RuleContractFixtures<BlueprintBodySubject>>> = {
+const RULE_FIXTURES: Readonly<Record<string, RuleContractFixtures<unknown>>> = {
   'max-parts-per-creature': {
     validSubject: CAT_BODY_FIXTURE,
     violatingSubject: {
@@ -230,6 +231,40 @@ const RULE_FIXTURES: Readonly<Record<string, RuleContractFixtures<BlueprintBodyS
       },
     },
   },
+  'max-learner-state-size': {
+    validSubject: {
+      ...CAT_BODY_FIXTURE,
+      brain: { modules: [{ instanceId: 'mem', params: { memorySlots: 8 } }] },
+    },
+    violatingSubject: {
+      ...CAT_BODY_FIXTURE,
+      brain: { modules: [{ instanceId: 'huge', params: { stateSize: 4096 } }] },
+    },
+  },
+  'max-memory-slots': {
+    validSubject: {
+      ...CAT_BODY_FIXTURE,
+      brain: { modules: [{ instanceId: 'mem', params: { memorySlots: 8 } }] },
+    },
+    violatingSubject: {
+      ...CAT_BODY_FIXTURE,
+      brain: { modules: [{ instanceId: 'mem', params: { memorySlots: 32 } }] },
+    },
+  },
+  'learning-rate-bounds': {
+    validSubject: {
+      ...CAT_BODY_FIXTURE,
+      brain: { modules: [{ instanceId: 'mem', params: { learningRate: 0.2 } }] },
+    },
+    violatingSubject: {
+      ...CAT_BODY_FIXTURE,
+      brain: { modules: [{ instanceId: 'mem', params: { learningRate: 0.9 } }] },
+    },
+  },
+  'learning-max-updates-per-second': {
+    validSubject: { updatesPerSecond: 5 },
+    violatingSubject: { updatesPerSecond: 40 },
+  },
 };
 
 const SENSOR_FIXTURES: Readonly<Record<string, { validParams: unknown; invalidParams: unknown }>> =
@@ -259,6 +294,8 @@ const BRAIN_MODULE_FIXTURES: Readonly<
   'seek-gradient': { validParams: {}, invalidParams: { visionTurnGain: 0 } },
   'random-wander': { validParams: {}, invalidParams: { turnIntervalSeconds: 0 } },
   'behavior-arbiter': { validParams: {}, invalidParams: { slots: [] } },
+  'nn-controller': { validParams: {}, invalidParams: { inputCount: 0 } },
+  'threat-memory': { validParams: {}, invalidParams: { memorySlots: 0 } },
   'rabbit-flee-predator': { validParams: {}, invalidParams: { escapeSpeed: 2 } },
   'fox-hunt-prey': { validParams: {}, invalidParams: { chaseSpeed: 0 } },
 };
@@ -266,11 +303,11 @@ const BRAIN_MODULE_FIXTURES: Readonly<
 describe('Automatic registry contract coverage', () => {
   it('covers every registered shape, rule, organ, sensor, actuator, brain module, spine, and species', () => {
     expect(shapeRegistry.size).toBe(7);
-    expect(ruleRegistry.size).toBe(15);
+    expect(ruleRegistry.size).toBe(19);
     expect(organRegistry.size).toBe(4);
     expect(sensorRegistry.size).toBe(4);
     expect(actuatorRegistry.size).toBe(3);
-    expect(brainModuleRegistry.size).toBe(6);
+    expect(brainModuleRegistry.size).toBe(8);
     expect(spineRegistry.size).toBe(1);
     expect(speciesRegistry.size).toBe(4);
 
@@ -304,7 +341,12 @@ for (const def of actuatorRegistry.list()) {
 }
 for (const def of brainModuleRegistry.list()) {
   const f = BRAIN_MODULE_FIXTURES[def.id];
-  if (f !== undefined) runBrainModuleContract(def, f);
+  if (f !== undefined) {
+    runBrainModuleContract(def, f);
+    if (def.kind === 'learning') {
+      runLearningModuleContract(def, f);
+    }
+  }
 }
 for (const def of spineRegistry.list()) {
   const f = SPINE_FIXTURES[def.id];

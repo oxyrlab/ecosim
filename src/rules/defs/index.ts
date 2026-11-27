@@ -2,12 +2,16 @@ import type { Registry } from '@core/index';
 import { registerRule, ruleRegistry } from '../define-rule';
 import type { RuleDef } from '../types';
 import { colliderConcaveStrategyRule } from './collider-concave-strategy';
+import { learningMaxUpdatesPerSecondRule } from './learning-max-updates-per-second';
+import { learningRateBoundsRule } from './learning-rate-bounds';
 import { maxAnimatedPartsRule } from './max-animated-parts';
 import { maxBrainModulesRule } from './max-brain-modules';
 import { maxBusChannelsRule } from './max-bus-channels';
 import { maxConvexVerticesRule } from './max-convex-vertices';
 import { maxJointChainLengthRule } from './max-joint-chain-length';
+import { maxLearnerStateSizeRule } from './max-learner-state-size';
 import { maxMassRatioJointedRule } from './max-mass-ratio-jointed';
+import { maxMemorySlotsRule } from './max-memory-slots';
 import { maxPartsPerCreatureRule } from './max-parts-per-creature';
 import { maxRigidBodiesPerCreatureRule } from './max-rigid-bodies-per-creature';
 import { maxSensorsPerCreatureRule } from './max-sensors-per-creature';
@@ -18,7 +22,7 @@ import { unmergedFanInRule } from './unmerged-fan-in';
 import { unusedOutputRule } from './unused-output';
 
 /**
- * All built-in Constraint Rules registered as of Phase 2 (15 rules).
+ * All built-in Constraint Rules registered as of Phase 6 (19 rules).
  */
 export const BUILTIN_RULES: readonly RuleDef<unknown, unknown>[] = Object.freeze([
   maxPartsPerCreatureRule as RuleDef<unknown, unknown>,
@@ -36,6 +40,10 @@ export const BUILTIN_RULES: readonly RuleDef<unknown, unknown>[] = Object.freeze
   unconnectedInputRule as RuleDef<unknown, unknown>,
   unusedOutputRule as RuleDef<unknown, unknown>,
   numericIndexOnLogicalPortRule as RuleDef<unknown, unknown>,
+  maxLearnerStateSizeRule as RuleDef<unknown, unknown>,
+  maxMemorySlotsRule as RuleDef<unknown, unknown>,
+  learningRateBoundsRule as RuleDef<unknown, unknown>,
+  learningMaxUpdatesPerSecondRule as RuleDef<unknown, unknown>,
 ]);
 
 /**
@@ -55,12 +63,19 @@ export function registerBuiltinRules(
 registerBuiltinRules(ruleRegistry);
 
 export { colliderConcaveStrategyRule } from './collider-concave-strategy';
+export {
+  learningMaxUpdatesPerSecondRule,
+  type LearningRuntimeSubject,
+} from './learning-max-updates-per-second';
+export { learningRateBoundsRule } from './learning-rate-bounds';
 export { maxAnimatedPartsRule } from './max-animated-parts';
 export { maxBrainModulesRule } from './max-brain-modules';
 export { maxBusChannelsRule } from './max-bus-channels';
 export { maxConvexVerticesRule } from './max-convex-vertices';
 export { maxJointChainLengthRule } from './max-joint-chain-length';
+export { maxLearnerStateSizeRule } from './max-learner-state-size';
 export { maxMassRatioJointedRule } from './max-mass-ratio-jointed';
+export { maxMemorySlotsRule } from './max-memory-slots';
 export { maxPartsPerCreatureRule } from './max-parts-per-creature';
 export { maxRigidBodiesPerCreatureRule } from './max-rigid-bodies-per-creature';
 export { maxSensorsPerCreatureRule } from './max-sensors-per-creature';

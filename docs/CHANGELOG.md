@@ -4,6 +4,15 @@ All notable changes to EcoSim, including any changes to default Constraint Rule 
 
 ## [Unreleased]
 
+### Added — Phase 6 (Evolution and Learning)
+
+- Recorded [ADR 0010](adr/0010-learning-neuromodulators.md) (simple event-driven `hormone.reward` / `hormone.aversive` neuromodulators gating learning only).
+- Added `src/genome/`: `mutateBlueprint`, `crossoverBlueprints`, `ReproductionComponent`, and energy-conserving asexual + sexual `stepReproductionSystem`.
+- Added `extractAppearanceFeatures` (`src/appearance/features.ts`) and `features: true` appearance-feature outputs in `vision-sensor`.
+- Integrated `@oxyrlab/neuro-learn` in `src/brain/learning/` and `src/brain/nn/`: `runLearnerContract` for all 4 learners + `mlp-sgd` numerical gradient check, `nn-controller` (`kind: 'nn'`), `threat-memory` (`kind: 'learning'` with conditioning, RBF generalization, and extinction), and ADR 0010 neuromodulator pulse helpers.
+- Registered all 4 learning Constraint Rules (`max-learner-state-size`, `max-memory-slots`, `learning-rate-bounds`, `learning-max-updates-per-second` — 19 total rules) with defaults in `src/config/rules.default.ts`.
+- Added `runLearningModuleContract`, real Rapier WASM learned-fear & reproduction integration tests (`tests/integration/evolution-and-learning.test.ts`), 90% coverage thresholds for `src/genome/**/*.ts`, and `docs/concepts/{genome,learning}.md` + `docs/guides/add-learning-module.md`.
+
 ### Added — Phase 5 (First Ecosystem)
 
 - Added shared brain modules (`src/brain/modules/`): `hunger-drive`, `seek-gradient`, `random-wander`, and `behavior-arbiter` (named `behavior` bundle slots).

@@ -12,9 +12,13 @@ export interface BlueprintBodySubject {
   };
   /** Optional growth scale multiplier at which to evaluate physical dimensions (default `1`). */
   readonly scale?: number;
-  /** Optional brain module declarations checked by `max-brain-modules`. */
+  /** Optional brain module declarations checked by brain & learning rules. */
   readonly brain?: {
-    readonly modules: readonly { readonly instanceId: string }[];
+    readonly modules: readonly {
+      readonly instanceId: string;
+      readonly module?: string;
+      readonly params?: unknown;
+    }[];
   };
   /** Optional resolved component endpoints and static wire list checked by bus/wiring rules. */
   readonly nervousGraph?: {

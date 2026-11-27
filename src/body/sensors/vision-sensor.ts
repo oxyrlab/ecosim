@@ -17,6 +17,7 @@ export const visionSensorParamsSchema = z.object({
   tags: z.array(z.string().min(1)).default(['plant', 'predator']),
   occlusion: z.enum(['none', 'raycast']).default('none'),
   maxEntityRadiusMeters: z.number().finite().positive().default(2),
+  features: z.boolean().default(false),
 });
 
 /** Validated parameters for {@link visionSensor}. */
@@ -77,6 +78,44 @@ export const visionSensor = defineSensor({
         description: `Normalized bearing in FOV to nearest visible "${tag}" (-1 left, +1 right).`,
       });
     }
+    if (params.features) {
+      out['nearest.seen'] = port.analog({
+        range: [0, 1],
+        unit: 'normalized',
+        description:
+          'Proximity (1 - distance/range) of nearest visible creature with appearance features.',
+      });
+      out['nearest.dir'] = port.analog({
+        range: [-1, 1],
+        unit: 'normalized',
+        description: 'Bearing in FOV to nearest visible creature with appearance features.',
+      });
+      out['nearest.size'] = port.analog({
+        range: [0, 1],
+        unit: 'normalized',
+        description: 'Normalized visual size of nearest creature.',
+      });
+      out['nearest.hue'] = port.analog({
+        range: [0, 1],
+        unit: 'normalized',
+        description: 'Normalized dominant fill hue of nearest creature.',
+      });
+      out['nearest.lightness'] = port.analog({
+        range: [0, 1],
+        unit: 'normalized',
+        description: 'Normalized dominant fill lightness of nearest creature.',
+      });
+      out['nearest.shape'] = port.analog({
+        range: [0, 1],
+        unit: 'normalized',
+        description: 'Normalized dominant primitive shape code of nearest creature.',
+      });
+      out['nearest.parts'] = port.analog({
+        range: [0, 1],
+        unit: 'normalized',
+        description: 'Normalized part count of nearest creature.',
+      });
+    }
     return out;
   },
   create(params, { outputs }) {
@@ -86,6 +125,7 @@ export const visionSensor = defineSensor({
     const invRange = 1 / range;
     const invMaxRadius = 1 / params.maxEntityRadiusMeters;
     const tags = params.tags;
+    const emitFeatures = params.features;
 
     // Pre-allocated scratch buffers so sample() allocates nothing in the hot loop.
     const bestSectorDist = new Float32Array(sectors);
@@ -100,6 +140,14 @@ export const visionSensor = defineSensor({
     const seenHandles = tags.map((t) => outputs[`seen.${t}`] as PortHandle);
     const dirHandles = tags.map((t) => outputs[`dir.${t}`] as PortHandle);
 
+    const fSeenH = emitFeatures ? (outputs['nearest.seen'] as PortHandle) : undefined;
+    const fDirH = emitFeatures ? (outputs['nearest.dir'] as PortHandle) : undefined;
+    const fSizeH = emitFeatures ? (outputs['nearest.size'] as PortHandle) : undefined;
+    const fHueH = emitFeatures ? (outputs['nearest.hue'] as PortHandle) : undefined;
+    const fLightH = emitFeatures ? (outputs['nearest.lightness'] as PortHandle) : undefined;
+    const fShapeH = emitFeatures ? (outputs['nearest.shape'] as PortHandle) : undefined;
+    const fPartsH = emitFeatures ? (outputs['nearest.parts'] as PortHandle) : undefined;
+
     return {
       sample(ctx, out) {
         bestSectorDist.fill(range);
@@ -107,6 +155,14 @@ export const visionSensor = defineSensor({
         sectorTagMask.fill(0);
         bestTagDist.fill(range);
         bestTagDir.fill(0);
+
+        let bestFeatDist = range;
+        let bestFeatDir = 0;
+        let bestFeatSize = 0;
+        let bestFeatHue = 0;
+        let bestFeatLight = 0;
+        let bestFeatShape = 0;
+        let bestFeatParts = 0;
 
         const neighbors = ctx.queryNeighbors(ctx.position, range);
         for (let i = 0; i < neighbors.length; i += 1) {
@@ -150,6 +206,16 @@ export const visionSensor = defineSensor({
               bestTagDir[t] = bearing;
             }
           }
+
+          if (emitFeatures && other.appearanceFeatures !== undefined && dist < bestFeatDist) {
+            bestFeatDist = dist;
+            bestFeatDir = bearing;
+            bestFeatSize = other.appearanceFeatures.size;
+            bestFeatHue = other.appearanceFeatures.hue;
+            bestFeatLight = other.appearanceFeatures.lightness;
+            bestFeatShape = other.appearanceFeatures.shape;
+            bestFeatParts = other.appearanceFeatures.parts;
+          }
         }
 
         for (let s = 0; s < sectors; s += 1) {
@@ -165,6 +231,17 @@ export const visionSensor = defineSensor({
           const proximity = d < range ? 1 - d * invRange : 0;
           out.set(seenHandles[t] as PortHandle, proximity);
           out.set(dirHandles[t] as PortHandle, d < range ? (bestTagDir[t] as number) : 0);
+        }
+
+        if (emitFeatures) {
+          const seen = bestFeatDist < range ? 1 - bestFeatDist * invRange : 0;
+          out.set(fSeenH as PortHandle, seen);
+          out.set(fDirH as PortHandle, bestFeatDist < range ? bestFeatDir : 0);
+          out.set(fSizeH as PortHandle, bestFeatSize);
+          out.set(fHueH as PortHandle, bestFeatHue);
+          out.set(fLightH as PortHandle, bestFeatLight);
+          out.set(fShapeH as PortHandle, bestFeatShape);
+          out.set(fPartsH as PortHandle, bestFeatParts);
         }
       },
     };

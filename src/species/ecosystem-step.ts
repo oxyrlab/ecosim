@@ -1,3 +1,4 @@
+import { triggerRewardModulator } from '@brain/index';
 import { assertFiniteNumber, InvalidParameterError } from '@core/index';
 import {
   CorpseComponent,
@@ -60,6 +61,20 @@ export function stepEcosystemTick(
   const actions = stepNervousSystem(world, dt);
   const bites = stepInteractionSystem(world, actions, ledger);
   recordFruitBites(world, bites);
+
+  // Release ADR 0010 reward pulse when an animal assimilates food energy
+  for (const bite of bites) {
+    if (bite.energyAssimilated <= 0) continue;
+    const actorBrain = world.ecs.getComponent(bite.actorEntityId, CreatureBrainComponent);
+    const actorEnergy = world.ecs.getComponent(bite.actorEntityId, EnergyComponent);
+    if (
+      actorBrain?.neuromodulators !== undefined &&
+      actorEnergy !== undefined &&
+      actorEnergy.max > 0
+    ) {
+      triggerRewardModulator(actorBrain.neuromodulators, bite.energyAssimilated / actorEnergy.max);
+    }
+  }
 
   stepPhotosynthesisSystem(world, dt, ledger);
   stepAgingSystem(world, dt);

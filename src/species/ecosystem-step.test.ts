@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { InvalidParameterError } from '@core/index';
-import { computeWorldEnergy, CorpseComponent, EnergyLedger } from '@life/index';
+import { computeWorldEnergy, CorpseComponent, EnergyComponent, EnergyLedger } from '@life/index';
 import { createMockPhysicsAdapter } from '@physics/mock-adapter';
 import { World } from '@world/index';
 import { computeWorldStateHash, stepEcosystemTick } from './ecosystem-step';
@@ -22,10 +22,11 @@ describe('ecosystem-step runner and state hash', () => {
       spawnSpeciesEntity(
         world,
         GRASS_BLUEPRINT,
-        { x: 10, y: 12 },
+        { x: 12.4, y: 12 },
         { plantOptions: { stage: 'mature' } },
       );
-      spawnSpeciesEntity(world, RABBIT_BLUEPRINT, { x: 12, y: 12 });
+      const rabbit = spawnSpeciesEntity(world, RABBIT_BLUEPRINT, { x: 12, y: 12 }, { angle: 0 });
+      world.ecs.requireComponent(rabbit, EnergyComponent).current = 15;
       spawnSpeciesEntity(world, FOX_BLUEPRINT, { x: 16, y: 12 }, { angle: Math.PI });
       const corpse = world.spawnSimpleBody({
         position: { x: 6, y: 6 },

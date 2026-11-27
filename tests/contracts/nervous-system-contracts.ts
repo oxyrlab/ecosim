@@ -155,6 +155,58 @@ export function runBrainModuleContract(
   });
 }
 
+/**
+ * Contract suite verifying every learning brain module (`kind === 'learning'`, Section 9.3):
+ * - learning happens only on learning signals (state unchanged without modulator/pain),
+ * - state is visible via `serialize()`,
+ * - a fresh offspring module starts with empty memory.
+ */
+export function runLearningModuleContract(
+  def: BrainModuleDef<unknown, PortMap, PortMap>,
+  fixtures: { readonly validParams: unknown; readonly invalidParams: unknown },
+): void {
+  describe(`LearningModuleContract(${def.id})`, () => {
+    it('starts with empty memory, exposes serialize(), and does not learn without a learning signal', () => {
+      expect(def.kind).toBe('learning');
+      const params = def.params.parse(fixtures.validParams);
+      const inputs = resolvePortMap(def.inputs, params);
+      const outputs = resolvePortMap(def.outputs, params);
+
+      const makeInstance = () => {
+        const { bus, handles } = resolveWiring(
+          [
+            {
+              instanceId: 'learn',
+              inputs,
+              outputs,
+              ...(def.publish !== undefined ? { publish: def.publish } : {}),
+              ...(def.subscribe !== undefined ? { subscribe: def.subscribe } : {}),
+            },
+          ],
+          [],
+        );
+        const h = handles.get('learn') as ResolvedComponentHandles;
+        const inst = def.create(params, h, createSeededRng(7));
+        return { bus, inst };
+      };
+
+      const parent = makeInstance();
+      const offspring = makeInstance();
+
+      expect(parent.inst.serialize).toBeDefined();
+      const initialState = parent.inst.serialize?.();
+      expect(initialState).toEqual(offspring.inst.serialize?.());
+
+      // Stepping with zero learning signals must keep memory state unchanged
+      for (let i = 0; i < 5; i += 1) {
+        parent.inst.tick(parent.bus.reader, parent.bus.writer, 0.1);
+        parent.bus.swap();
+      }
+      expect(parent.inst.serialize?.()).toEqual(initialState);
+    });
+  });
+}
+
 /** Contract suite verifying every registered {@link SpineDef}. */
 export function runSpineContract(
   def: SpineDef<unknown, PortMap, PortMap>,

@@ -21,4 +21,8 @@ export const DEFAULT_RULE_CONFIG: Readonly<Record<string, RuleConfigEntry>> = Ob
   'unconnected-input': { severity: 'warn', params: {} },
   'unused-output': { severity: 'off', params: {} },
   'numeric-index-on-logical-port': { severity: 'error', params: {} },
+  'max-learner-state-size': { severity: 'warn', params: { max: 1024 } },
+  'max-memory-slots': { severity: 'warn', params: { max: 16 } },
+  'learning-rate-bounds': { severity: 'error', params: { min: 0.001, max: 0.5 } },
+  'learning-max-updates-per-second': { severity: 'warn', params: { max: 20 } },
 });

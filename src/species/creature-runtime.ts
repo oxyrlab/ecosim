@@ -1,7 +1,13 @@
+import type { AppearanceFeatures } from '@appearance/features';
 import type { ResolvedBodyLayout } from '@appearance/types';
 import type { ActuatorActionEvent, ActuatorInstance } from '@body/actuators';
 import type { NeighborObservation, SensorInstance } from '@body/sensors';
-import type { BrainModuleInstance } from '@brain/index';
+import {
+  decayNeuromodulators,
+  type BrainModuleInstance,
+  type NeuromodulatorState,
+} from '@brain/index';
+import type { PortHandle } from '@bus/ports';
 import type { SignalBus } from '@bus/signal-bus';
 import {
   add,
@@ -47,6 +53,12 @@ export interface CreatureBrainData {
   readonly speciesId: string;
   readonly bus: SignalBus;
   readonly layout: ResolvedBodyLayout;
+  readonly appearanceFeatures?: AppearanceFeatures;
+  readonly neuromodulators?: NeuromodulatorState;
+  readonly modulatorHandles?: {
+    readonly reward?: PortHandle;
+    readonly aversive?: PortHandle;
+  };
   readonly rng: SeededRng;
   readonly sensors: readonly MountedSensorRuntime[];
   readonly brainModules: readonly {
@@ -107,6 +119,20 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
     const read = brain.bus.reader;
     const write = brain.bus.writer;
 
+    // Publish short-lived ADR 0010 neuromodulator pulses (reward / aversive) into subscribed channels
+    if (brain.neuromodulators !== undefined) {
+      if (painPulse > 0 && painPulse > brain.neuromodulators.aversive) {
+        brain.neuromodulators.aversive = painPulse;
+      }
+      if (brain.modulatorHandles?.reward !== undefined) {
+        write.set(brain.modulatorHandles.reward, brain.neuromodulators.reward);
+      }
+      if (brain.modulatorHandles?.aversive !== undefined) {
+        write.set(brain.modulatorHandles.aversive, brain.neuromodulators.aversive);
+      }
+      decayNeuromodulators(brain.neuromodulators, dt);
+    }
+
     // 1. Sample mounted sensors
     const rootPos: Vec2 = { x: transform.x, y: transform.y };
     for (let i = 0; i < brain.sensors.length; i += 1) {
@@ -129,11 +155,15 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
               if (oTransform === undefined) continue;
               const oBody = world.ecs.getComponent(otherId, PhysicsBodyComponent);
               const oTags = world.ecs.getComponent(otherId, TagsComponent);
+              const oBrain = world.ecs.getComponent(otherId, CreatureBrainComponent);
               result.push({
                 entityId: otherId,
                 position: { x: oTransform.x, y: oTransform.y },
                 radius: oBody?.boundingRadius ?? 0.1,
                 tags: oTags?.values ?? new Set<string>(),
+                ...(oBrain?.appearanceFeatures !== undefined
+                  ? { appearanceFeatures: oBrain.appearanceFeatures }
+                  : {}),
               });
             }
             return result;

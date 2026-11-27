@@ -1,7 +1,13 @@
+import { extractAppearanceFeatures } from '@appearance/features';
 import { buildPhysicsBodyFromLayout, resolveLayout } from '@appearance/layout';
 import type { ResolvedBodyLayout } from '@appearance/types';
 import { actuatorRegistry, resolvePortMap, sensorRegistry } from '@body/index';
-import { brainModuleRegistry, type BrainModuleInstance } from '@brain/index';
+import {
+  brainModuleRegistry,
+  createNeuromodulatorState,
+  type BrainModuleInstance,
+} from '@brain/index';
+import type { PortHandle } from '@bus/ports';
 import {
   resolveWiring,
   type ResolvedComponentHandles,
@@ -230,7 +236,13 @@ export function validateAnimalBlueprint(
     {
       body: blueprint.body,
       scale,
-      brain: { modules: blueprint.brain.modules },
+      brain: {
+        modules: parsedBrainModules.map((m) => ({
+          instanceId: m.instanceId,
+          module: m.moduleId,
+          params: m.params,
+        })),
+      },
       nervousGraph: { endpoints, wires: blueprint.wiring },
     },
     ruleConfig,
@@ -378,10 +390,27 @@ export function spawnSpeciesEntity(
     };
   });
 
+  let rewardHandle: PortHandle | undefined;
+  let aversiveHandle: PortHandle | undefined;
+  for (const h of validated.wiring.handles.values()) {
+    if (rewardHandle === undefined && h.subscribe['hormone.reward'] !== undefined) {
+      rewardHandle = h.subscribe['hormone.reward'];
+    }
+    if (aversiveHandle === undefined && h.subscribe['hormone.aversive'] !== undefined) {
+      aversiveHandle = h.subscribe['hormone.aversive'];
+    }
+  }
+
   world.ecs.addComponent(entity, CreatureBrainComponent, {
     speciesId: blueprint.id,
     bus: validated.wiring.bus,
     layout: validated.layout,
+    appearanceFeatures: extractAppearanceFeatures(validated.layout),
+    neuromodulators: createNeuromodulatorState(),
+    modulatorHandles: {
+      ...(rewardHandle !== undefined ? { reward: rewardHandle } : {}),
+      ...(aversiveHandle !== undefined ? { aversive: aversiveHandle } : {}),
+    },
     rng: entityRng,
     sensors,
     brainModules,

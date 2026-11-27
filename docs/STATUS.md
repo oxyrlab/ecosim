@@ -1,32 +1,24 @@
 # Project Status
 
-- **Current Phase:** Phase 7 — Observation & Sandbox Tools (**Complete**)
-- **Next Phase:** Phase 8 — Optimization
+- **Milestone 1 (Phases 0–8):** **Completed** (2026-11-27)
+- **Current Stage:** Ready for **Milestone 2** — see [MILESTONE-2.md](MILESTONE-2.md) for the full technical baseline, invariants, extension points, and upcoming roadmap space.
 - **Last Updated:** 2026-11-27
 
-## Completed in Phase 7
+## Milestone 1 Completion Summary (Phases 0–8)
 
-- **Simulation Scenario, Inspector & Telemetry (`src/sim/`):**
-  - Added Zod-validated `ScenarioConfig` (`src/sim/scenario.ts`) with `createDefaultMeadowScenario`, `createEmptySandboxScenario`, JSON save/load (`serializeScenario` / `parseScenarioJson`), and tick-stamped Sandbox command replay ([ADR 0009](adr/0009-deterministic-sandbox-commands.md)).
-  - Added live entity inspection & picking (`src/sim/inspector.ts`: `inspectEntity`, `pickEntityAtWorldPos`) exposing `SignalBus` channel snapshots, brain module `serialize()` states, vitals, neuromodulators, tags, and Constraint Rule diagnostics.
-  - Added simulation telemetry & CSV exporter (`src/sim/stats.ts`: `collectSimulationStats`, `collectGenomeSummary`, `StatsHistory`, `statsHistoryToCsv`).
-  - Upgraded `Simulation` (`src/sim/simulation.ts`), `SimCommand` (`spawn-species`, `clear-world`), and `SimWorkerApi` (`src/sim/worker.ts`) with ecosystem ticking, `EnergyLedger` accounting, Transferable `FieldHeatmapSnapshot`s, and Scenario/Inspector/Stats RPCs.
-- **Field Heatmap & Selection Rendering (`src/render/`):**
-  - Added pure heatmap color-ramp mapper (`src/render/heatmap.ts`) and upgraded `EcoSimRenderer` (`src/render/renderer.ts`) with viewport-culled field heatmap overlays, selected-entity highlight rings, and continuous drag brushing.
-- **Modular Observation & Sandbox HUD (`src/ui/`, `src/main.ts`):**
-  - Split UI into small single-responsibility modules: pure logic (`sandbox-state.ts`, `chart-svg.ts`, `inspector-format.ts`) + accessible DOM panels (`playback-bar.ts`, `sandbox-toolbar.ts`, `inspector-panel.ts`, `toolbar-a11y.ts`, `hud.ts`, `hud.css`).
-  - Wired Play/Pause/Step/Speed controls, Inspect/Spawn/Remove/Brush tools, Heatmap overlay selector, live SVG population chart, collapsible Entity Inspector, and Scenario JSON Save/Load in `src/main.ts`.
-- **Headless CLI Runner (`src/headless/`):**
-  - Added programmatic `runHeadlessSimulation`, `parseHeadlessArgs`, and `formatHeadlessOutput` (`src/headless/runner.ts`) plus thin Node CLI entry (`src/headless/run.ts`, `npm run headless`) supporting `--seed`, `--ticks`, `--scenario`, `--out`, `--format json|csv`, and `--sample-interval`.
-- **Tests & Docs:**
-  - Added real Rapier WASM integration tests (`tests/integration/sandbox-and-headless.test.ts`) proving bit-exact Sandbox JSON command replay, live SignalBus inspection, and deterministic headless runs with balanced `EnergyLedger`.
-  - Added 90% coverage thresholds for `src/ui/**/*.ts` and `src/headless/**/*.ts`, plus [docs/guides/sandbox-and-headless.md](guides/sandbox-and-headless.md).
+All foundational phases from the initial specification are complete and verified:
 
-## Exact Next Task (Phase 8 — Optimization)
+- **Phases 0–7:** Infrastructure, deterministic Rapier 2D physics & grid fields, procedural appearance, double-buffered `SignalBus` & modular nervous system, metabolism & `EnergyLedger`, full plant lifecycle, first 4-species ecosystem (`grass`, `berry-bush`, `rabbit`, `fox`), evolution/reproduction & `@oxyrlab/neuro-learn` learning (ADR 0010), live Observation HUD, deterministic Interactive Sandbox (ADR 0009), and Headless CLI runner.
+- **Phase 8 (Optimization & Procedural Canvas Rendering):**
+  - Added reproducible scale & micro-benchmark runner (`scripts/bench-scale.ts`, `npm run bench`) and deterministic scale stress test (`tests/scenarios/scale-budget.test.ts`).
+  - Optimized `SpatialHash` (`4.15 ms → 1.20 ms`, **3.46× faster**), skipped fixed bodies in `syncFromPhysics()`, eliminated per-creature closures and per-plant coordinate allocations, and enforced staggered sensor `sampleRateHz` while keeping brain modules ticking every tick for lossless pulse chains.
+  - Reduced target-scale mean tick time (500 animals + 500 plants + 100 objects, real Rapier WASM) from **`18.86 ms`** to **`8.00 ms`** (`min 7.00 ms`), meeting the Section 7 `<= 8 ms` budget without altering Constraint Rule defaults.
+  - Connected Phase 1.5 procedural species shapes (`src/render/species-shapes.ts`) and `AppearanceTextureCache` + pooled PixiJS `Sprite`s directly to `EcoSimRenderer`.
+- **Final Milestone 1 Verification:** `138` test files / `375` tests passing (`98.29%` Stmts, `92.92%` Branch, `99.10%` Funcs, `99.20%` Lines), `format:check`, `typecheck`, `lint`, `docs:check`, `vite build`, and `npm run bench` all green.
 
-1. Profile at target scale (~500 animals, ~500 plants, ~100 other objects) in headless benchmarks and identify hot spots across physics, spatial hash, grid diffusion, sensors, brain stepping, and rendering.
-2. Optimize hot paths (typed array pooling, zero-allocation hot loops, viewport culling / batching / texture-cache integration in PixiJS renderer) while preserving bit-exact determinism and >= 90% coverage.
-3. Tune default Constraint Rule thresholds in `src/config/rules.default.ts` ONLY if backed by benchmark evidence, recording results in `docs/CHANGELOG.md`.
+## Exact Next Task
+
+- Capture user requirements and next-stage phases in [MILESTONE-2.md](MILESTONE-2.md) before beginning Milestone 2 implementation.
 
 ## Open Design Questions
 
@@ -34,4 +26,4 @@
 
 ## Open Issues & Technical Debt
 
-- None in Phases 0–7.
+- None in Milestone 1 (Phases 0–8).

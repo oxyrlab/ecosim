@@ -37,7 +37,7 @@ export interface WorldConfig {
   readonly gridCols: number;
   /** Number of grid rows for fields (>= 1). */
   readonly gridRows: number;
-  /** Spatial hash cell size in meters (default `2`). */
+  /** Spatial hash cell size in meters (default `4`). */
   readonly spatialCellSizeMeters?: number;
   /** When `true`, creates four fixed boundary walls enclosing the world (default `true`). */
   readonly addBoundaryWalls?: boolean;
@@ -154,7 +154,7 @@ export class World {
       cellSizeMeters: cellSizeX,
       ...(config.fieldDynamics !== undefined ? { dynamics: config.fieldDynamics } : {}),
     });
-    this.spatialHash = new SpatialHash(config.spatialCellSizeMeters ?? 2);
+    this.spatialHash = new SpatialHash(config.spatialCellSizeMeters ?? 4);
     this.rng = createSeededRng(config.seed);
 
     if (config.addBoundaryWalls ?? true) {
@@ -207,6 +207,7 @@ export class World {
       colliderHandles: [colliderHandle],
       jointHandles: [],
       boundingRadius: spec.radius,
+      isFixed: (spec.bodyKind ?? 'dynamic') === 'fixed',
     });
     this.ecs.addComponent(entity, RenderableStubComponent, {
       kind: spec.kind ?? 1,
@@ -265,8 +266,10 @@ export class World {
    */
   public syncFromPhysics(): void {
     const entities = this.ecs.query(TransformComponent, PhysicsBodyComponent);
-    for (const entity of entities) {
+    for (let i = 0; i < entities.length; i += 1) {
+      const entity = entities[i] as EntityId;
       const body = this.ecs.requireComponent(entity, PhysicsBodyComponent);
+      if (body.isFixed) continue;
       const transform = this.ecs.requireComponent(entity, TransformComponent);
       const pose = this.physics.getBodyTransform(body.bodyHandle);
       transform.x = pose.position.x;

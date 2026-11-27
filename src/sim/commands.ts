@@ -1,4 +1,5 @@
 import type { EntityId, Vec2 } from '@core/index';
+import type { PlantStage } from '@plants/components';
 import type { FieldBrushMode } from '@world/index';
 
 /**
@@ -14,6 +15,13 @@ export type SimCommand =
       readonly kind?: number;
       readonly linearVelocity?: Vec2;
       readonly tags?: readonly string[];
+    }
+  | {
+      readonly type: 'spawn-species';
+      readonly speciesId: string;
+      readonly position: Vec2;
+      readonly angle?: number;
+      readonly plantStage?: PlantStage;
     }
   | {
       readonly type: 'remove-entity';
@@ -32,6 +40,9 @@ export type SimCommand =
       readonly type: 'apply-impulse';
       readonly entityId: EntityId;
       readonly impulse: Vec2;
+    }
+  | {
+      readonly type: 'clear-world';
     };
 
 /**

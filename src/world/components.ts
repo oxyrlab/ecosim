@@ -27,6 +27,8 @@ export interface PhysicsBodyData {
   readonly jointHandles: readonly JointHandle[];
   /** Bounding radius in meters for spatial hash indexing. */
   readonly boundingRadius: number;
+  /** When `true`, the rigid body is fixed/immovable and skipped during `syncFromPhysics`. */
+  readonly isFixed?: boolean;
 }
 
 /**

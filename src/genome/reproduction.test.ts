@@ -10,7 +10,7 @@ import {
 import { createMockPhysicsAdapter } from '@physics/mock-adapter';
 import { spawnSpeciesEntity } from '@species/entity-factory';
 import { RABBIT_BLUEPRINT } from '@species/rabbit/blueprint';
-import { World } from '@world/index';
+import { RenderableStubComponent, World } from '@world/index';
 import type { MutationSpec } from './mutation';
 import {
   ReproductionComponent,
@@ -64,9 +64,25 @@ describe('reproduction system (asexual & sexual)', () => {
     // Cooldown prevents immediate second birth
     expect(stepReproductionSystem(world, 1, ledger)).toEqual([]);
 
-    // 2. Sexual reproduction between two nearby well-fed parents
-    const parent1 = spawnSpeciesEntity(world, RABBIT_BLUEPRINT, { x: 20, y: 20 });
-    const parent2 = spawnSpeciesEntity(world, RABBIT_BLUEPRINT, { x: 21, y: 20 });
+    // 2. Sexual reproduction between two nearby well-fed parents with complementary organs
+    const parent1 = spawnSpeciesEntity(
+      world,
+      RABBIT_BLUEPRINT,
+      { x: 20, y: 20 },
+      {
+        reproductiveOrgan: 'reproductive-female',
+        initialEnergy: 70,
+      },
+    );
+    const parent2 = spawnSpeciesEntity(
+      world,
+      RABBIT_BLUEPRINT,
+      { x: 21, y: 20 },
+      {
+        reproductiveOrgan: 'reproductive-male',
+        initialEnergy: 70,
+      },
+    );
     world.ecs.requireComponent(parent1, EnergyComponent).current = 70;
     world.ecs.requireComponent(parent2, EnergyComponent).current = 70;
     const sexualSpec = reproductionSpecSchema.parse({
@@ -94,7 +110,91 @@ describe('reproduction system (asexual & sexual)', () => {
     expect(birthsS).toHaveLength(1);
     expect(birthsS[0]?.mode).toBe('sexual');
     expect(birthsS[0]?.parentIds).toHaveLength(2);
+    // Newborn starts visibly smaller than adult parents
+    const baby = birthsS[0];
+    expect(baby).toBeDefined();
+    const babyRadius = world.ecs.requireComponent(
+      baby?.offspringId as typeof parent1,
+      RenderableStubComponent,
+    ).radius;
+    const parentRadius = world.ecs.requireComponent(parent1, RenderableStubComponent).radius;
+    expect(babyRadius).toBeLessThan(parentRadius * 0.7);
     expect(ledger.audit(computeWorldEnergy(world), 1e-2).balanced).toBe(true);
+
+    // When requireOrganContact is true, distant complementary parents do NOT mate
+    const contactSpec = reproductionSpecSchema.parse({
+      mode: 'sexual',
+      minEnergyToReproduce: 40,
+      offspringEnergy: 22,
+      overheadCost: 6,
+      cooldownSeconds: 10,
+      mateRadiusMeters: 3,
+      requireOrganContact: true,
+    });
+    const farF = spawnSpeciesEntity(
+      world,
+      RABBIT_BLUEPRINT,
+      { x: 24, y: 24 },
+      {
+        reproductiveOrgan: 'reproductive-female',
+        initialEnergy: 80,
+      },
+    );
+    const farM = spawnSpeciesEntity(
+      world,
+      RABBIT_BLUEPRINT,
+      { x: 25.5, y: 24 },
+      {
+        reproductiveOrgan: 'reproductive-male',
+        initialEnergy: 80,
+      },
+    );
+    for (const pid of [farF, farM]) {
+      world.ecs.addComponent(pid, ReproductionComponent, {
+        speciesId: 'rabbit',
+        blueprint: RABBIT_BLUEPRINT,
+        spec: contactSpec,
+        mutation,
+        cooldownRemainingSeconds: 0,
+        generation: 0,
+        offspringCount: 0,
+      });
+    }
+    ledger.recordInitialSpawn((80 + RABBIT_BLUEPRINT.metabolism.structuralEnergy) * 2);
+    expect(stepReproductionSystem(world, 0.5, ledger)).toEqual([]);
+
+    // Same-sex pair cannot reproduce sexually
+    const sameA = spawnSpeciesEntity(
+      world,
+      RABBIT_BLUEPRINT,
+      { x: 15, y: 5 },
+      {
+        reproductiveOrgan: 'reproductive-female',
+        initialEnergy: 75,
+      },
+    );
+    const sameB = spawnSpeciesEntity(
+      world,
+      RABBIT_BLUEPRINT,
+      { x: 15.6, y: 5 },
+      {
+        reproductiveOrgan: 'reproductive-female',
+        initialEnergy: 75,
+      },
+    );
+    for (const pid of [sameA, sameB]) {
+      world.ecs.addComponent(pid, ReproductionComponent, {
+        speciesId: 'rabbit',
+        blueprint: RABBIT_BLUEPRINT,
+        spec: sexualSpec,
+        mutation,
+        cooldownRemainingSeconds: 0,
+        generation: 0,
+        offspringCount: 0,
+      });
+    }
+    ledger.recordInitialSpawn((75 + RABBIT_BLUEPRINT.metabolism.structuralEnergy) * 2);
+    expect(stepReproductionSystem(world, 0.5, ledger)).toEqual([]);
 
     expect(() => stepReproductionSystem(world, -1)).toThrow(InvalidParameterError);
 

@@ -1,5 +1,5 @@
 import { assertFiniteNumber, clamp, InvalidParameterError, type EntityId } from '@core/index';
-import { TransformComponent, type World } from '@world/index';
+import { RenderableStubComponent, TransformComponent, type World } from '@world/index';
 import { CorpseComponent } from './components';
 import type { EnergyLedger } from './energy-ledger';
 
@@ -51,6 +51,19 @@ export function stepDecompositionSystem(
       release += corpse.energy;
       corpse.energy = 0;
       toRemove.push(entity);
+    } else if (corpse.initialEnergy > 0) {
+      const stub = world.ecs.getComponent(entity, RenderableStubComponent);
+      if (stub !== undefined) {
+        const remainingRatio = clamp(corpse.energy / corpse.initialEnergy, 0, 1);
+        const visualRadius = corpse.radius * (0.45 + 0.55 * remainingRatio);
+        if (Math.abs(visualRadius - stub.radius) >= 0.01) {
+          world.ecs.setComponent(entity, RenderableStubComponent, {
+            kind: stub.kind,
+            radius: visualRadius,
+            color: stub.color,
+          });
+        }
+      }
     }
 
     if (release > 0) {

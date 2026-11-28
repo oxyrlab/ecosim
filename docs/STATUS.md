@@ -1,8 +1,16 @@
 # Project Status
 
 - **Milestone 1 (Phases 0–8):** **Completed** (2026-11-27)
-- **Current Stage:** Ready for **Milestone 2** — see [MILESTONE-2.md](MILESTONE-2.md) for the full technical baseline, invariants, extension points, and upcoming roadmap space.
-- **Last Updated:** 2026-11-27
+- **Milestone 2 (Visual Overhaul, Organ-Based Reproduction, Allometric Physics & Ecological Benchmarks):** **In Progress** — first 4 workstreams completed and verified (2026-11-28). See [MILESTONE-2.md](MILESTONE-2.md) for full details.
+- **Last Updated:** 2026-11-28
+
+## Milestone 2 Progress Summary (2026-11-28)
+
+- **Visual Overhaul (Groups 1–4):** Layered top-down sprites for `rabbit` & `fox`, 6-stage `grass` & `berry-bush`, crisp `fruit`/`corpse`/`rock`, and organic meadow terrain (`src/render/`).
+- **Organ-Based Biological Sex:** Added `reproductive-male` / `reproductive-female` organs (`6` organs total) and `reproductive-sensor` (`5` sensors total) with complementary contact enforcement, Inspector readout, and subtle sex marker spots on animals.
+- **Physics, Steering & Ecological Calibration:** Allometric `thruster` (`scale²`) and closed-loop `rotator` (`scale⁴` + `angularVelocity` rate control), natural `move → pause → turn` exploration, alignment-gated feeding/hunting, randomized initial energy/age/lifespan/`adultScaleRange`, newborn juvenile sizing (`0.48×`) with live growth sync in `stepAgingSystem`, and `10 sim s = 1 ecological day` metabolic calibration. Fixed shared `actuatorPos` bite-event aliasing and grass runaway flowering.
+- **Scenario Registry, UI & Ecological Benchmarks:** Added shared `SCENARIO_PRESETS` (`default-meadow`, `rabbit-starvation-5`, `rabbit-foraging-5`, `rabbit-reproduction-5`, `empty-sandbox`), HUD Scenario Dropdown + `Seed` input / `Random Seed` / `Reset`, and `npm run bench:ecology` (both `rabbit-starvation-5` and `rabbit-foraging-5` passing against biological reference bounds).
+- **Current Verification:** `145` test files / `386` tests passing, `format:check`, `typecheck`, `lint`, `docs:check`, `vite build`, and `npm run bench:ecology` all green.
 
 ## Milestone 1 Completion Summary (Phases 0–8)
 
@@ -18,7 +26,7 @@ All foundational phases from the initial specification are complete and verified
 
 ## Exact Next Task
 
-- Capture user requirements and next-stage phases in [MILESTONE-2.md](MILESTONE-2.md) before beginning Milestone 2 implementation.
+- Next Milestone 2 increments (awaiting user direction): wall/boundary perception & avoidance, `seek-mate` brain module driven by `reproductive-sensor`, and additional predator-prey/evolution benchmark scenarios.
 
 ## Open Design Questions
 

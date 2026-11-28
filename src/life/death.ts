@@ -1,7 +1,7 @@
 import type { EntityId } from '@core/index';
 import { COLLISION_GROUP } from '@physics/types';
 import { RenderableStubComponent, TransformComponent, type World } from '@world/index';
-import { CorpseComponent, EnergyComponent, HealthComponent } from './components';
+import { CorpseComponent, EnergyComponent, HealthComponent, type DeathCause } from './components';
 import type { EnergyLedger } from './energy-ledger';
 
 /**
@@ -23,6 +23,7 @@ export interface DeathRecord {
   readonly deadEntityId: EntityId;
   readonly corpseEntityId: EntityId | null;
   readonly corpseEnergy: number;
+  readonly deathCause: DeathCause;
 }
 
 /**
@@ -49,6 +50,8 @@ export function stepDeathSystem(
 
   const records: DeathRecord[] = [];
   for (const entity of deadEntities) {
+    const health = world.ecs.requireComponent(entity, HealthComponent);
+    const deathCause: DeathCause = health.deathCause;
     const transform = world.ecs.getComponent(entity, TransformComponent);
     const energy = world.ecs.getComponent(entity, EnergyComponent);
     const renderable = world.ecs.getComponent(entity, RenderableStubComponent);
@@ -66,7 +69,7 @@ export function stepDeathSystem(
         position: pos,
         radius,
         bodyKind: 'fixed',
-        kind: 4,
+        kind: 5,
         color: corpseColor,
         tags: ['corpse'],
         collisionGroup: COLLISION_GROUP.FRUIT,
@@ -85,6 +88,7 @@ export function stepDeathSystem(
       deadEntityId: entity,
       corpseEntityId: corpseId,
       corpseEnergy: residualEnergy,
+      deathCause,
     });
   }
 

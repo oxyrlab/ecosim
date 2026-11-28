@@ -8,7 +8,7 @@
 | ---------------------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
 | `hunger-drive`         | utility  | Converts normalized energy deficit into a nonlinear foraging urge and broadcasts hormone.satiety.                    |
 | `seek-gradient`        | rule     | Steers toward a visual target or stereo olfactory gradient, outputting a behavior bundle and close-range bite pulse. |
-| `random-wander`        | rule     | Generates deterministic low-priority wandering steering using the entity seeded RNG.                                 |
+| `random-wander`        | rule     | Generates deterministic naturalistic move-pause-turn exploration steering using the entity seeded RNG.               |
 | `behavior-arbiter`     | utility  | Selects the highest-urgency named behavior bundle slot and emits move.forward, move.turn, and action.bite.           |
 | `nn-controller`        | nn       | Allocation-free feedforward neural network controller backed by @oxyrlab/neuro-learn with evolvable weights.         |
 | `threat-memory`        | learning | Modulator-gated fear conditioning associating visual appearance features with pain/aversive signals.                 |

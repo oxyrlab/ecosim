@@ -22,15 +22,17 @@ export const RABBIT_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
         id: 'torso',
         z: 1,
         shape: { type: 'ellipse', w: 0.44, h: 0.26 },
+        massDensity: 12,
         style: { fill: { h: 35, s: 0.22, l: 0.72 } },
         sensors: [
           { instanceId: 'energy', sensor: 'energy-sensor' },
           { instanceId: 'pain', sensor: 'pain-sensor' },
+          { instanceId: 'repro', sensor: 'reproductive-sensor' },
         ],
         actuator: {
           instanceId: 'turner',
           actuator: 'rotator',
-          params: { maxTorqueNewtonMeters: 2.2 },
+          params: { maxTorqueNewtonMeters: 0.9, energyPerTorqueSecond: 0.02 },
         },
       },
       {
@@ -40,6 +42,7 @@ export const RABBIT_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
         pivot: 'back',
         z: 2,
         shape: { type: 'circle', r: 0.12 },
+        massDensity: 10,
         style: { fill: { h: 35, s: 0.2, l: 0.78 } },
         sensors: [
           {
@@ -65,7 +68,7 @@ export const RABBIT_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
         actuator: {
           instanceId: 'mouth',
           actuator: 'bite',
-          params: { rangeMeters: 0.45, damage: 5, cooldownSeconds: 0.5 },
+          params: { rangeMeters: 0.65, damage: 8, cooldownSeconds: 0.6, energyCostPerBite: 0.25 },
         },
       },
       {
@@ -91,7 +94,7 @@ export const RABBIT_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
         actuator: {
           instanceId: 'thrust',
           actuator: 'thruster',
-          params: { maxForceNewtons: 4.5, energyPerNewtonSecond: 0.02 },
+          params: { maxForceNewtons: 12, energyPerNewtonSecond: 0.006 },
         },
         anim: [{ kind: 'swing', channel: '$actuator:power', amplitude: 0.4 }],
       },
@@ -113,10 +116,14 @@ export const RABBIT_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
       {
         instanceId: 'forage',
         module: 'seek-gradient',
-        params: { forwardSpeed: 0.78, biteProximityThreshold: 0.86 },
+        params: { forwardSpeed: 0.65, biteProximityThreshold: 0.9 },
       },
       { instanceId: 'flee', module: 'rabbit-flee-predator' },
-      { instanceId: 'wander', module: 'random-wander', params: { baseUrgency: 0.18 } },
+      {
+        instanceId: 'wander',
+        module: 'random-wander',
+        params: { baseUrgency: 0.18, cruiseSpeed: 0.32, maxTurnRate: 0.55 },
+      },
       {
         instanceId: 'arbiter',
         module: 'behavior-arbiter',
@@ -127,7 +134,7 @@ export const RABBIT_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
   spine: {
     instanceId: 'spine',
     spine: 'differential-drive',
-    params: { forwardGain: 1, turnGain: 1 },
+    params: { forwardGain: 1, turnGain: 1, differentialTurnScale: 0 },
   },
   wiring: [
     // Energy -> Hunger -> Forage drive
@@ -159,10 +166,11 @@ export const RABBIT_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
     { from: 'spine:mouth.bite', to: 'mouth:trigger' },
   ],
   metabolism: {
-    initialEnergy: 45,
-    maxEnergy: 80,
-    structuralEnergy: 12,
-    basalRatePerKgPerSecond: 0.35,
+    initialEnergy: 65,
+    initialEnergyRange: [52, 78],
+    maxEnergy: 100,
+    structuralEnergy: 15,
+    basalRatePerKgPerSecond: 0.42,
     brainUpkeepPerModulePerSecond: 0.02,
     starvationDamagePerSecond: 3,
   },
@@ -171,11 +179,14 @@ export const RABBIT_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
     edibleTags: ['plant', 'fruit'],
   },
   lifecycle: {
-    maxAgeSeconds: 180,
-    maturityAgeSeconds: 20,
-    juvenileScale: 0.65,
+    maxAgeSeconds: 1050,
+    maxAgeRange: [900, 1200],
+    maturityAgeSeconds: 60,
+    initialAgeRange: [80, 240],
+    juvenileScale: 0.48,
     adultScale: 1,
-    senescenceStartFraction: 0.75,
+    adultScaleRange: [0.85, 1.15],
+    senescenceStartFraction: 0.78,
     minSenescenceEfficiency: 0.55,
     maxHealth: 25,
     energyPerDamage: 1.5,

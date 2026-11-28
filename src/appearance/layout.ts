@@ -331,8 +331,8 @@ export function buildPhysicsBodyFromLayout(
       kind: 'dynamic',
       position: groupWorldPos,
       angle: groupWorldAngle,
-      linearDamping: 0.6,
-      angularDamping: 0.8,
+      linearDamping: 2.8,
+      angularDamping: 5.5,
     });
     bodiesByGroup.set(group.id, bodyHandle);
     bodies.push(bodyHandle);

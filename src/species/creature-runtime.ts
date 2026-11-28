@@ -1,7 +1,17 @@
 import type { AppearanceFeatures } from '@appearance/features';
 import type { ResolvedBodyLayout } from '@appearance/types';
 import type { ActuatorActionEvent, ActuatorContext, ActuatorInstance } from '@body/actuators';
-import type { NeighborObservation, SensorContext, SensorInstance } from '@body/sensors';
+import {
+  areOrgansComplementary,
+  computeOrganWorldPosition,
+  ReproductiveOrganComponent,
+} from '@body/organs';
+import type {
+  NeighborObservation,
+  NeighborReproductiveOrgan,
+  SensorContext,
+  SensorInstance,
+} from '@body/sensors';
 import {
   decayNeuromodulators,
   type BrainModuleInstance,
@@ -18,7 +28,7 @@ import {
   type SeededRng,
   type Vec2,
 } from '@core/index';
-import { EnergyComponent, HealthComponent, type EnergyData } from '@life/index';
+import { EnergyComponent, HealthComponent, LifecycleComponent, type EnergyData } from '@life/index';
 import type { BodyHandle } from '@physics/types';
 import type { SpineInstance } from '@spine/index';
 import { PhysicsBodyComponent, TagsComponent, TransformComponent, type World } from '@world/index';
@@ -116,14 +126,28 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
   let currentEnergy: EnergyData | undefined;
   const sensorPos = { x: 0, y: 0 };
   const actuatorPos = { x: 0, y: 0 };
-  const bodyState = { energyRatio: 1, healthRatio: 1, painPulse: 0 };
+  const bodyState: {
+    energyRatio: number;
+    healthRatio: number;
+    painPulse: number;
+    isMature: boolean;
+    speciesId: string;
+    reproductiveOrgan: NeighborReproductiveOrgan | undefined;
+  } = {
+    energyRatio: 1,
+    healthRatio: 1,
+    painPulse: 0,
+    isMature: true,
+    speciesId: '',
+    reproductiveOrgan: undefined,
+  };
   const neighborBuffer: NeighborObservation[] = [];
 
   const sensorCtx: {
     entityId: EntityId;
     position: Vec2;
     angle: number;
-    bodyState: { energyRatio: number; healthRatio: number; painPulse: number };
+    bodyState: typeof bodyState;
     queryNeighbors: SensorContext['queryNeighbors'];
     sampleField: SensorContext['sampleField'];
     castRay: SensorContext['castRay'];
@@ -143,6 +167,20 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
         const oBody = ecs.getComponent(otherId, PhysicsBodyComponent);
         const oTags = ecs.getComponent(otherId, TagsComponent);
         const oBrain = ecs.getComponent(otherId, CreatureBrainComponent);
+        const oOrgan = ecs.getComponent(otherId, ReproductiveOrganComponent);
+        const reproductiveOrgan: NeighborReproductiveOrgan | undefined =
+          oOrgan !== undefined && oBrain !== undefined
+            ? {
+                organId: oOrgan.organId,
+                speciesId: oBrain.speciesId,
+                worldPosition: computeOrganWorldPosition(
+                  oTransform,
+                  oTransform.angle,
+                  oOrgan.localOffset,
+                ),
+                contactRadiusMeters: oOrgan.contactRadiusMeters,
+              }
+            : undefined;
         neighborBuffer.push({
           entityId: otherId,
           position: oTransform,
@@ -151,6 +189,7 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
           ...(oBrain?.appearanceFeatures !== undefined
             ? { appearanceFeatures: oBrain.appearanceFeatures }
             : {}),
+          ...(reproductiveOrgan !== undefined ? { reproductiveOrgan } : {}),
         });
       }
       return neighborBuffer;
@@ -172,6 +211,8 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
     entityId: EntityId;
     worldPosition: Vec2;
     worldAngle: number;
+    bodyScale: number;
+    angularVelocity: number;
     applyForce: ActuatorContext['applyForce'];
     applyImpulse: ActuatorContext['applyImpulse'];
     applyTorque: ActuatorContext['applyTorque'];
@@ -182,6 +223,8 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
     entityId: initialEntity,
     worldPosition: actuatorPos,
     worldAngle: 0,
+    bodyScale: 1,
+    angularVelocity: 0,
     applyForce(force, atWorldPoint) {
       world.physics.applyForce(currentTargetBody, force, atWorldPoint ?? actuatorPos);
     },
@@ -202,7 +245,11 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
       }
     },
     emitAction(event) {
-      events.push(event);
+      events.push({
+        ...event,
+        origin: { x: event.origin.x, y: event.origin.y },
+        direction: { x: event.direction.x, y: event.direction.y },
+      });
     },
   };
 
@@ -215,6 +262,8 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
     const transform = world.ecs.requireComponent(entity, TransformComponent);
     const body = world.ecs.requireComponent(entity, PhysicsBodyComponent);
     const energy = world.ecs.getComponent(entity, EnergyComponent);
+    const lifecycle = world.ecs.getComponent(entity, LifecycleComponent);
+    const organ = world.ecs.getComponent(entity, ReproductiveOrganComponent);
 
     currentRootBody = body.bodyHandle;
     currentEnergy = energy;
@@ -226,6 +275,50 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
     bodyState.healthRatio =
       health !== undefined && health.max > 0 ? clamp(health.current / health.max, 0, 1) : 1;
     bodyState.painPulse = health !== undefined ? clamp(health.recentPainPulse, 0, 1) : 0;
+    bodyState.isMature =
+      lifecycle === undefined || lifecycle.ageSeconds >= lifecycle.maturityAgeSeconds;
+    bodyState.speciesId = brain.speciesId;
+
+    if (organ !== undefined) {
+      const ownOrganPos = computeOrganWorldPosition(transform, transform.angle, organ.localOffset);
+      bodyState.reproductiveOrgan = {
+        organId: organ.organId,
+        speciesId: brain.speciesId,
+        worldPosition: ownOrganPos,
+        contactRadiusMeters: organ.contactRadiusMeters,
+      };
+      // Update lightweight complementary organ contact state (zero extra physics colliders)
+      const contactScan = world.spatialHash.queryRadius(
+        ownOrganPos.x,
+        ownOrganPos.y,
+        organ.contactRadiusMeters * 2.5 + body.boundingRadius,
+      );
+      let contactPartner: EntityId | null = null;
+      for (let k = 0; k < contactScan.length; k += 1) {
+        const otherId = contactScan[k] as EntityId;
+        if (otherId === entity) continue;
+        const otherOrgan = world.ecs.getComponent(otherId, ReproductiveOrganComponent);
+        if (otherOrgan === undefined || !areOrgansComplementary(organ, otherOrgan)) continue;
+        const otherBrain = world.ecs.getComponent(otherId, CreatureBrainComponent);
+        if (otherBrain === undefined || otherBrain.speciesId !== brain.speciesId) continue;
+        const otherTransform = world.ecs.getComponent(otherId, TransformComponent);
+        if (otherTransform === undefined) continue;
+        const otherPos = computeOrganWorldPosition(
+          otherTransform,
+          otherTransform.angle,
+          otherOrgan.localOffset,
+        );
+        const dist = Math.hypot(otherPos.x - ownOrganPos.x, otherPos.y - ownOrganPos.y);
+        if (dist <= organ.contactRadiusMeters + otherOrgan.contactRadiusMeters) {
+          contactPartner = otherId;
+          break;
+        }
+      }
+      organ.inContact = contactPartner !== null;
+      organ.contactPartnerId = contactPartner;
+    } else {
+      bodyState.reproductiveOrgan = undefined;
+    }
 
     const read = brain.bus.reader;
     const write = brain.bus.writer;
@@ -283,7 +376,9 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
     // 3. Tick spine
     brain.spine.tick(read, write, dt);
 
-    // 4. Apply actuators
+    // 4. Apply actuators (scaled by physical layout scale with live angular-velocity feedback)
+    actuatorCtx.bodyScale = brain.layout.scale;
+    const rootAngularVelocity = world.physics.getBodyTransform(body.bodyHandle).angularVelocity;
     for (let i = 0; i < brain.actuators.length; i += 1) {
       const act = brain.actuators[i] as MountedActuatorRuntime;
       currentTargetBody = act.targetBody;
@@ -292,6 +387,10 @@ export function stepNervousSystem(world: World, dt: number): ActuatorActionEvent
       actuatorPos.x = transform.x + lx * cosA - ly * sinA;
       actuatorPos.y = transform.y + lx * sinA + ly * cosA;
       actuatorCtx.worldAngle = transform.angle + act.localAngle;
+      actuatorCtx.angularVelocity =
+        act.targetBody === body.bodyHandle
+          ? rootAngularVelocity
+          : world.physics.getBodyTransform(act.targetBody).angularVelocity;
       act.instance.apply(actuatorCtx, read, dt);
     }
 

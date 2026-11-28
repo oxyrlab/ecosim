@@ -27,13 +27,18 @@ describe('random-wander module', () => {
         createSeededRng(42),
       );
       const turns: number[] = [];
-      for (let i = 0; i < 6; i += 1) {
+      const forwards: number[] = [];
+      for (let i = 0; i < 16; i += 1) {
         inst.tick(bus.reader, bus.writer, 0.25);
         bus.swap();
         turns.push(bus.reader.get(turn));
+        forwards.push(bus.reader.get(forward));
         expect(bus.reader.get(urgency)).toBeCloseTo(params.baseUrgency);
-        expect(bus.reader.get(forward)).toBeCloseTo(params.cruiseSpeed);
+        expect(bus.reader.get(forward)).toBeGreaterThanOrEqual(0);
+        expect(bus.reader.get(forward)).toBeLessThanOrEqual(params.cruiseSpeed * 1.25);
       }
+      expect(forwards.some((f) => f === 0)).toBe(true);
+      expect(forwards.some((f) => f > 0)).toBe(true);
       expect(inst.serialize?.()).toBeDefined();
       return turns;
     };

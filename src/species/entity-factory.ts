@@ -1,7 +1,16 @@
 import { extractAppearanceFeatures } from '@appearance/features';
 import { buildPhysicsBodyFromLayout, resolveLayout } from '@appearance/layout';
 import type { ResolvedBodyLayout } from '@appearance/types';
-import { actuatorRegistry, resolvePortMap, sensorRegistry } from '@body/index';
+import {
+  actuatorRegistry,
+  createReproductiveOrganData,
+  ReproductiveOrganComponent,
+  resolvePortMap,
+  sensorRegistry,
+  sexToOrganId,
+  type BiologicalSex,
+  type ReproductiveOrganId,
+} from '@body/index';
 import {
   brainModuleRegistry,
   createNeuromodulatorState,
@@ -17,6 +26,7 @@ import {
 import {
   assertFiniteVec2,
   BlueprintValidationError,
+  clamp,
   createSeededRng,
   type EntityId,
   type Vec2,
@@ -89,6 +99,16 @@ export interface SpawnSpeciesOptions {
   readonly angle?: number;
   /** Initial growth scale for animals (default `blueprint.lifecycle.adultScale`). */
   readonly scale?: number;
+  /** Optional explicit reproductive organ (`'reproductive-male'` or `'reproductive-female'`). */
+  readonly reproductiveOrgan?: ReproductiveOrganId;
+  /** Optional convenience biological sex (`'male'` or `'female'`) mapped to its organ. */
+  readonly sex?: BiologicalSex;
+  /** Optional explicit initial usable energy override in `EU`. */
+  readonly initialEnergy?: number;
+  /** Optional explicit initial age override in seconds. */
+  readonly initialAgeSeconds?: number;
+  /** Optional explicit maximum lifespan override in seconds. */
+  readonly maxAgeSeconds?: number;
   /** Optional plant spawn options when spawning a `kingdom: 'plant'` blueprint. */
   readonly plantOptions?: SpawnPlantOptions;
 }
@@ -289,9 +309,51 @@ export function spawnSpeciesEntity(
     return spawnPlant(world, blueprint.plantSpec, position, options.plantOptions);
   }
 
-  const scale = options.scale ?? blueprint.lifecycle.adultScale;
+  const sampledMaxAge =
+    options.maxAgeSeconds !== undefined
+      ? options.maxAgeSeconds
+      : blueprint.lifecycle.maxAgeRange !== undefined
+        ? world.rng.nextRange(
+            blueprint.lifecycle.maxAgeRange[0],
+            blueprint.lifecycle.maxAgeRange[1],
+          )
+        : blueprint.lifecycle.maxAgeSeconds;
+  const maxAgeSeconds = Math.max(blueprint.lifecycle.maturityAgeSeconds + 1, sampledMaxAge);
+
+  const sampledInitialAge =
+    options.initialAgeSeconds !== undefined
+      ? options.initialAgeSeconds
+      : blueprint.lifecycle.initialAgeRange !== undefined
+        ? world.rng.nextRange(
+            blueprint.lifecycle.initialAgeRange[0],
+            blueprint.lifecycle.initialAgeRange[1],
+          )
+        : blueprint.lifecycle.maturityAgeSeconds;
+  const initialAgeSeconds = clamp(sampledInitialAge, 0, maxAgeSeconds * 0.85);
+
+  const individualAdultScale =
+    options.scale !== undefined
+      ? options.scale
+      : blueprint.lifecycle.adultScaleRange !== undefined
+        ? world.rng.nextRange(
+            blueprint.lifecycle.adultScaleRange[0],
+            blueprint.lifecycle.adultScaleRange[1],
+          )
+        : blueprint.lifecycle.adultScale;
+  const individualJuvenileScale =
+    blueprint.lifecycle.juvenileScale * (individualAdultScale / blueprint.lifecycle.adultScale);
+  const maturityFraction =
+    blueprint.lifecycle.maturityAgeSeconds > 0
+      ? clamp(initialAgeSeconds / blueprint.lifecycle.maturityAgeSeconds, 0, 1)
+      : 1;
+  const scale =
+    options.scale !== undefined
+      ? options.scale
+      : individualJuvenileScale +
+        (individualAdultScale - individualJuvenileScale) * maturityFraction;
   const angle = options.angle ?? 0;
   const validated = validateAnimalBlueprint(blueprint, scale);
+  const baseRadiusMeters = scale > 0 ? validated.boundingRadius / scale : validated.boundingRadius;
 
   const entity = world.ecs.createEntity();
   const built = buildPhysicsBodyFromLayout(
@@ -320,11 +382,24 @@ export function spawnSpeciesEntity(
     jointHandles: built.joints,
     boundingRadius: validated.boundingRadius,
   });
+  const organId: ReproductiveOrganId =
+    options.reproductiveOrgan ??
+    (options.sex !== undefined
+      ? sexToOrganId(options.sex)
+      : world.rng.next() < 0.5
+        ? 'reproductive-male'
+        : 'reproductive-female');
+  const organData = createReproductiveOrganData(organId, {
+    localOffset: { x: -validated.boundingRadius * 0.3, y: 0 },
+    contactRadiusMeters: Math.max(0.35, validated.boundingRadius * 1.15),
+  });
+  world.ecs.addComponent(entity, ReproductiveOrganComponent, organData);
+
   const renderKind = blueprint.id === 'rabbit' ? 10 : blueprint.id === 'fox' ? 11 : 1;
   world.ecs.addComponent(entity, RenderableStubComponent, {
     kind: renderKind,
     radius: validated.boundingRadius,
-    color: blueprint.stubColor,
+    color: organData.markerColor,
   });
   world.ecs.addComponent(entity, TagsComponent, {
     values: new Set(blueprint.tags),
@@ -422,9 +497,22 @@ export function spawnSpeciesEntity(
     ...(blueprint.scentEmission !== undefined ? { scentEmission: blueprint.scentEmission } : {}),
   });
 
+  const sizeEnergyScale = individualAdultScale / blueprint.lifecycle.adultScale;
+  const maxEnergy = blueprint.metabolism.maxEnergy * sizeEnergyScale;
+  const sampledInitialEnergy =
+    options.initialEnergy !== undefined
+      ? options.initialEnergy
+      : (blueprint.metabolism.initialEnergyRange !== undefined
+          ? world.rng.nextRange(
+              blueprint.metabolism.initialEnergyRange[0],
+              blueprint.metabolism.initialEnergyRange[1],
+            )
+          : blueprint.metabolism.initialEnergy) * sizeEnergyScale;
+  const initialEnergy = clamp(sampledInitialEnergy, 0.5, maxEnergy);
+
   world.ecs.addComponent(entity, EnergyComponent, {
-    current: blueprint.metabolism.initialEnergy,
-    max: blueprint.metabolism.maxEnergy,
+    current: initialEnergy,
+    max: maxEnergy,
     massKg: validated.totalMassKg,
     basalRatePerKgPerSecond: blueprint.metabolism.basalRatePerKgPerSecond,
     brainUpkeepPerSecond:
@@ -440,15 +528,16 @@ export function spawnSpeciesEntity(
   });
 
   world.ecs.addComponent(entity, LifecycleComponent, {
-    ageSeconds: blueprint.lifecycle.maturityAgeSeconds,
-    maxAgeSeconds: blueprint.lifecycle.maxAgeSeconds,
+    ageSeconds: initialAgeSeconds,
+    maxAgeSeconds,
     maturityAgeSeconds: blueprint.lifecycle.maturityAgeSeconds,
-    juvenileScale: blueprint.lifecycle.juvenileScale,
-    adultScale: blueprint.lifecycle.adultScale,
+    juvenileScale: individualJuvenileScale,
+    adultScale: individualAdultScale,
     senescenceStartFraction: blueprint.lifecycle.senescenceStartFraction,
     minSenescenceEfficiency: blueprint.lifecycle.minSenescenceEfficiency,
     currentScale: scale,
     efficiency: 1,
+    baseRadiusMeters,
   });
 
   world.ecs.addComponent(entity, HealthComponent, {

@@ -1,3 +1,4 @@
+import type { ScenarioPresetSummary } from '@sim/scenario-registry';
 import type { SpeciesSummary } from '@sim/worker';
 import type { SandboxState, SandboxTool } from '../sandbox-state';
 import { attachToolbarRovingTabindexFallback } from './toolbar-a11y';
@@ -12,7 +13,10 @@ export interface SandboxToolbarCallbacks {
   readonly onBrushFieldChange: (fieldName: string) => void;
   readonly onBrushRadiusChange: (radius: number) => void;
   readonly onBrushValueChange: (value: number) => void;
-  readonly onLoadPreset: (preset: 'default' | 'empty') => void;
+  readonly onSelectScenario: (scenarioId: string) => void;
+  readonly onResetScenario: () => void;
+  readonly onSeedChange: (seed: number) => void;
+  readonly onRandomizeSeed: () => void;
   readonly onSaveScenario: () => void;
   readonly onLoadScenarioJson: (jsonText: string) => void;
 }
@@ -40,6 +44,7 @@ const TOOL_SPECS: ReadonlyArray<{ readonly id: SandboxTool; readonly label: stri
 export function createSandboxToolbar(
   species: readonly SpeciesSummary[],
   fields: readonly string[],
+  scenarios: readonly ScenarioPresetSummary[],
   callbacks: SandboxToolbarCallbacks,
 ): SandboxToolbarHandle {
   const bar = document.createElement('div');
@@ -143,17 +148,47 @@ export function createSandboxToolbar(
   scenarioGroup.setAttribute('role', 'group');
   scenarioGroup.setAttribute('aria-label', 'Scenario presets and save/load');
 
-  const meadowBtn = document.createElement('button');
-  meadowBtn.type = 'button';
-  meadowBtn.className = 'ecosim-btn';
-  meadowBtn.textContent = 'Reset Meadow';
-  meadowBtn.addEventListener('click', () => callbacks.onLoadPreset('default'));
+  const scenarioSelect = document.createElement('select');
+  scenarioSelect.className = 'ecosim-select';
+  scenarioSelect.setAttribute('aria-label', 'Scenario preset');
+  for (const preset of scenarios) {
+    const opt = document.createElement('option');
+    opt.value = preset.id;
+    opt.textContent = preset.label;
+    opt.title = preset.description;
+    scenarioSelect.append(opt);
+  }
+  scenarioSelect.addEventListener('change', () => callbacks.onSelectScenario(scenarioSelect.value));
 
-  const emptyBtn = document.createElement('button');
-  emptyBtn.type = 'button';
-  emptyBtn.className = 'ecosim-btn';
-  emptyBtn.textContent = 'Blank Arena';
-  emptyBtn.addEventListener('click', () => callbacks.onLoadPreset('empty'));
+  const resetBtn = document.createElement('button');
+  resetBtn.type = 'button';
+  resetBtn.className = 'ecosim-btn';
+  resetBtn.textContent = 'Reset';
+  resetBtn.title = 'Reload the selected scenario with the current seed (deterministic replay)';
+  resetBtn.addEventListener('click', callbacks.onResetScenario);
+
+  const seedInput = document.createElement('input');
+  seedInput.type = 'number';
+  seedInput.className = 'ecosim-input';
+  seedInput.min = '1';
+  seedInput.max = '2147483647';
+  seedInput.step = '1';
+  seedInput.style.width = '72px';
+  seedInput.title = 'Deterministic world seed (same seed = identical run)';
+  seedInput.setAttribute('aria-label', 'Simulation seed');
+  seedInput.addEventListener('change', () => {
+    const parsed = Math.trunc(Number(seedInput.value));
+    if (Number.isFinite(parsed) && parsed > 0) {
+      callbacks.onSeedChange(parsed);
+    }
+  });
+
+  const randomSeedBtn = document.createElement('button');
+  randomSeedBtn.type = 'button';
+  randomSeedBtn.className = 'ecosim-btn';
+  randomSeedBtn.textContent = 'Random Seed';
+  randomSeedBtn.title = 'Pick a new random seed and reload scenario for a fresh non-repeating run';
+  randomSeedBtn.addEventListener('click', callbacks.onRandomizeSeed);
 
   const saveBtn = document.createElement('button');
   saveBtn.type = 'button';
@@ -180,7 +215,7 @@ export function createSandboxToolbar(
   loadBtn.textContent = 'Load JSON';
   loadBtn.addEventListener('click', () => fileInput.click());
 
-  scenarioGroup.append(meadowBtn, emptyBtn, saveBtn, loadBtn);
+  scenarioGroup.append(scenarioSelect, seedInput, randomSeedBtn, resetBtn, saveBtn, loadBtn);
 
   bar.append(
     toolGroup,
@@ -203,6 +238,8 @@ export function createSandboxToolbar(
         btn.setAttribute('aria-pressed', String(id === state.tool));
       }
       speciesSelect.value = state.selectedSpeciesId;
+      scenarioSelect.value = state.selectedScenarioId;
+      seedInput.value = String(state.seed);
       heatmapSelect.value = state.heatmapField ?? '';
       brushSelect.value = state.brushField;
       radiusInput.value = String(state.brushRadius);

@@ -1,5 +1,5 @@
 import { assertFiniteNumber, InvalidParameterError } from '@core/index';
-import type { World } from '@world/index';
+import { RenderableStubComponent, type World } from '@world/index';
 import { HealthComponent, LifecycleComponent, type LifecycleData } from './components';
 
 /**
@@ -45,6 +45,19 @@ export function stepAgingSystem(world: World, dt: number): void {
     lifecycle.ageSeconds += dt;
     lifecycle.currentScale = computeGrowthScale(lifecycle);
     lifecycle.efficiency = computeMetabolicEfficiency(lifecycle);
+
+    if (lifecycle.baseRadiusMeters !== undefined && lifecycle.baseRadiusMeters > 0) {
+      const renderable = world.ecs.getComponent(entity, RenderableStubComponent);
+      if (renderable !== undefined) {
+        const targetRadius = lifecycle.baseRadiusMeters * lifecycle.currentScale;
+        if (Math.abs(targetRadius - renderable.radius) > 1e-4) {
+          world.ecs.setComponent(entity, RenderableStubComponent, {
+            ...renderable,
+            radius: targetRadius,
+          });
+        }
+      }
+    }
 
     if (lifecycle.ageSeconds >= lifecycle.maxAgeSeconds) {
       const health = world.ecs.getComponent(entity, HealthComponent);

@@ -1,5 +1,6 @@
 import './hud.css';
 import type { EntityInspection } from '@sim/inspector';
+import type { ScenarioPresetSummary } from '@sim/scenario-registry';
 import type { SimulationStatsSnapshot } from '@sim/stats';
 import type { SpeciesSummary } from '@sim/worker';
 import { createInspectorPanel, type InspectorPanelHandle } from './panels/inspector-panel';
@@ -40,6 +41,7 @@ export class EcoSimHud {
     rootContainer: HTMLElement,
     species: readonly SpeciesSummary[],
     fields: readonly string[],
+    scenarios: readonly ScenarioPresetSummary[],
     callbacks: EcoSimHudCallbacks,
   ) {
     this.shell = document.createElement('div');
@@ -52,7 +54,7 @@ export class EcoSimHud {
     topBar.className = 'ecosim-hud-top';
 
     this.playback = createPlaybackBar(callbacks);
-    this.toolbar = createSandboxToolbar(species, fields, callbacks);
+    this.toolbar = createSandboxToolbar(species, fields, scenarios, callbacks);
     topBar.append(this.playback.element, this.toolbar.element);
 
     this.inspector = createInspectorPanel();

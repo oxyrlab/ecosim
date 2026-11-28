@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import {
+  areOrgansComplementary,
+  computeOrganWorldPosition,
+  ReproductiveOrganComponent,
+} from '@body/organs';
+import {
   assertFiniteNumber,
   clamp,
   defineComponent,
@@ -38,6 +43,8 @@ export interface ReproductionSpec {
   readonly cooldownSeconds: number;
   /** Maximum distance in meters to find a conspecific mate in `'sexual'` mode. */
   readonly mateRadiusMeters: number;
+  /** When `true` in `'sexual'` mode, requires complementary reproductive organs to physically overlap. */
+  readonly requireOrganContact?: boolean;
 }
 
 /**
@@ -50,6 +57,7 @@ export const reproductionSpecSchema = z.object({
   overheadCost: z.number().finite().nonnegative().default(5),
   cooldownSeconds: z.number().finite().nonnegative().default(15),
   mateRadiusMeters: z.number().finite().positive().default(3),
+  requireOrganContact: z.boolean().default(false),
 });
 
 /**
@@ -191,6 +199,8 @@ export function stepReproductionSystem(
       };
       const offspringId = spawnSpeciesEntity(world, childBpWithEnergy, childPos, {
         angle: world.rng.next() * Math.PI * 2,
+        initialEnergy: spec.offspringEnergy,
+        initialAgeSeconds: 0,
       });
       world.ecs.addComponent(offspringId, ReproductionComponent, {
         speciesId: repro.speciesId,
@@ -224,6 +234,7 @@ export function stepReproductionSystem(
         spec.mateRadiusMeters,
       );
 
+      const selfOrgan = world.ecs.getComponent(entity, ReproductiveOrganComponent);
       let partnerId: EntityId | null = null;
       for (const candidate of neighbors) {
         if (candidate === entity || matedThisTick.has(candidate) || !world.ecs.isAlive(candidate)) {
@@ -237,13 +248,31 @@ export function stepReproductionSystem(
         ) {
           continue;
         }
+        // Require complementary reproductive organs (male + female) when present on both parents.
+        const partnerOrgan = world.ecs.getComponent(candidate, ReproductiveOrganComponent);
+        if (
+          selfOrgan !== undefined &&
+          partnerOrgan !== undefined &&
+          !areOrgansComplementary(selfOrgan, partnerOrgan)
+        ) {
+          continue;
+        }
         if (!isReadyToReproduce(world, candidate, parentMin)) continue;
         const pPos = world.ecs.getComponent(candidate, TransformComponent);
         if (pPos === undefined) continue;
-        if (Math.hypot(pPos.x - parentPos.x, pPos.y - parentPos.y) <= spec.mateRadiusMeters) {
-          partnerId = candidate;
-          break;
+        if (Math.hypot(pPos.x - parentPos.x, pPos.y - parentPos.y) > spec.mateRadiusMeters) {
+          continue;
         }
+        if (spec.requireOrganContact && selfOrgan !== undefined && partnerOrgan !== undefined) {
+          const posA = computeOrganWorldPosition(parentPos, parentPos.angle, selfOrgan.localOffset);
+          const posB = computeOrganWorldPosition(pPos, pPos.angle, partnerOrgan.localOffset);
+          const organDist = Math.hypot(posB.x - posA.x, posB.y - posA.y);
+          if (organDist > selfOrgan.contactRadiusMeters + partnerOrgan.contactRadiusMeters) {
+            continue;
+          }
+        }
+        partnerId = candidate;
+        break;
       }
 
       if (partnerId === null) continue;
@@ -289,6 +318,8 @@ export function stepReproductionSystem(
         { x: midX, y: midY },
         {
           angle: world.rng.next() * Math.PI * 2,
+          initialEnergy: spec.offspringEnergy,
+          initialAgeSeconds: 0,
         },
       );
       world.ecs.addComponent(offspringId, ReproductionComponent, {

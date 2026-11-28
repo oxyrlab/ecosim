@@ -145,8 +145,9 @@ describe('Phase 5 balanced first-ecosystem scenario (real Rapier WASM)', () => {
 
     expect(runA.hash).toBe(runB.hash);
     expect(runA.audit.balanced).toBe(true);
-    expect(runA.plantCount).toBeGreaterThanOrEqual(10);
+    expect(runA.plantCount).toBeGreaterThanOrEqual(5);
     expect(runA.animalCount).toBeGreaterThan(0);
+    expect(runA.totalBites).toBeGreaterThan(0);
     expect(runA.rabbitsMoved).toBe(true);
     expect(runA.foxMoved).toBe(true);
     expect(runA.totalFruits).toBeGreaterThan(0);

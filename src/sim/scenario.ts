@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ReproductiveOrganId } from '@body/organs';
 import { createEntityId, createSeededRng, InvalidParameterError } from '@core/index';
 import { mutationSpecSchema, ReproductionComponent, reproductionSpecSchema } from '@genome/index';
 import { computeWorldEnergy, type EnergyLedger } from '@life/index';
@@ -21,6 +22,8 @@ const plantStageSchema = z.enum([
   'senescence',
 ]);
 
+const reproductiveOrganSchema = z.enum(['reproductive-male', 'reproductive-female']);
+
 const fieldBrushModeSchema = z.enum(['set', 'add']);
 
 const simCommandSchema: z.ZodType<SimCommand> = z.discriminatedUnion('type', [
@@ -39,6 +42,10 @@ const simCommandSchema: z.ZodType<SimCommand> = z.discriminatedUnion('type', [
     position: vec2Schema,
     angle: z.number().finite().optional(),
     plantStage: plantStageSchema.optional(),
+    reproductiveOrgan: reproductiveOrganSchema.optional(),
+    initialEnergy: z.number().finite().positive().optional(),
+    initialAgeSeconds: z.number().finite().nonnegative().optional(),
+    maxAgeSeconds: z.number().finite().positive().optional(),
   }),
   z.object({
     type: z.literal('remove-entity'),
@@ -96,6 +103,10 @@ export interface ScenarioSpeciesSpawn {
   readonly position: { readonly x: number; readonly y: number };
   readonly angle?: number | undefined;
   readonly plantStage?: PlantStage | undefined;
+  readonly reproductiveOrgan?: ReproductiveOrganId | undefined;
+  readonly initialEnergy?: number | undefined;
+  readonly initialAgeSeconds?: number | undefined;
+  readonly maxAgeSeconds?: number | undefined;
 }
 
 /**
@@ -146,6 +157,10 @@ export const scenarioConfigSchema = z.object({
         position: vec2Schema,
         angle: z.number().finite().optional(),
         plantStage: plantStageSchema.optional(),
+        reproductiveOrgan: reproductiveOrganSchema.optional(),
+        initialEnergy: z.number().finite().positive().optional(),
+        initialAgeSeconds: z.number().finite().nonnegative().optional(),
+        maxAgeSeconds: z.number().finite().positive().optional(),
       }),
     )
     .default([]),
@@ -205,18 +220,33 @@ export function createDefaultMeadowScenario(seed = 42): ScenarioConfig {
     y: Number(rng.nextRange(margin, height - margin).toFixed(3)),
   });
 
+  const grassStages: readonly PlantStage[] = [
+    'mature',
+    'mature',
+    'flowering',
+    'sprout',
+    'fruiting',
+  ];
   for (let i = 0; i < 18; i += 1) {
     initialSpawns.push({
       speciesId: 'grass',
       position: randomPos(),
-      plantStage: 'mature',
+      plantStage: grassStages[i % grassStages.length],
     });
   }
+  const bushStages: readonly PlantStage[] = [
+    'fruiting',
+    'flowering',
+    'mature',
+    'fruiting',
+    'flowering',
+    'sprout',
+  ];
   for (let i = 0; i < 6; i += 1) {
     initialSpawns.push({
       speciesId: 'berry-bush',
       position: randomPos(),
-      plantStage: 'flowering',
+      plantStage: bushStages[i % bushStages.length],
     });
   }
   for (let i = 0; i < 7; i += 1) {
@@ -224,6 +254,7 @@ export function createDefaultMeadowScenario(seed = 42): ScenarioConfig {
       speciesId: 'rabbit',
       position: randomPos(),
       angle: Number((rng.next() * Math.PI * 2).toFixed(4)),
+      reproductiveOrgan: i < 4 ? 'reproductive-female' : 'reproductive-male',
     });
   }
   for (let i = 0; i < 2; i += 1) {
@@ -231,6 +262,7 @@ export function createDefaultMeadowScenario(seed = 42): ScenarioConfig {
       speciesId: 'fox',
       position: randomPos(),
       angle: Number((rng.next() * Math.PI * 2).toFixed(4)),
+      reproductiveOrgan: i === 0 ? 'reproductive-female' : 'reproductive-male',
     });
   }
 
@@ -278,7 +310,211 @@ export function createEmptySandboxScenario(seed = 42): ScenarioConfig {
 }
 
 /**
- * Resolves a built-in scenario preset by name (`'default'`, `'meadow'`, or `'empty'`).
+ * Builds the first ecological validation benchmark scenario: 5 rabbits (3 female, 2 male) placed
+ * in a barren 40x40 m arena with zero plants so starvation survival curves and locomotion
+ * kinematics can be verified against real Oryctolagus cuniculus fasting data (7–12 days).
+ */
+export function createRabbitStarvationScenario(seed = 42): ScenarioConfig {
+  const rng = createSeededRng(seed);
+  const width = 40;
+  const height = 40;
+  const organs: readonly ReproductiveOrganId[] = [
+    'reproductive-female',
+    'reproductive-female',
+    'reproductive-female',
+    'reproductive-male',
+    'reproductive-male',
+  ];
+  const initialSpawns: ScenarioSpeciesSpawn[] = organs.map((organ, idx) => {
+    const theta = (idx / organs.length) * Math.PI * 2 + rng.nextRange(-0.25, 0.25);
+    const radius = rng.nextRange(6, 12);
+    return {
+      speciesId: 'rabbit',
+      position: {
+        x: Number((width * 0.5 + Math.cos(theta) * radius).toFixed(3)),
+        y: Number((height * 0.5 + Math.sin(theta) * radius).toFixed(3)),
+      },
+      angle: Number((rng.next() * Math.PI * 2).toFixed(4)),
+      reproductiveOrgan: organ,
+    };
+  });
+
+  return {
+    version: 1,
+    name: 'rabbit-starvation-5',
+    description:
+      'Ecological starvation benchmark: 5 rabbits (3 female, 2 male) in a 40x40m arena with zero plants.',
+    world: {
+      seed,
+      widthMeters: width,
+      heightMeters: height,
+      gridCols: 40,
+      gridRows: 40,
+    },
+    enableReproduction: true,
+    initialFields: [
+      { fieldName: 'soil.nutrients', x: 20, y: 20, radiusMeters: 24, value: 4, mode: 'set' },
+      { fieldName: 'soil.moisture', x: 20, y: 20, radiusMeters: 24, value: 0.5, mode: 'set' },
+    ],
+    initialSpawns,
+    commands: [],
+  };
+}
+
+/**
+ * Builds the foraging control benchmark: 5 rabbits (3 female, 2 male) in a fertile grass meadow
+ * with no predators, verifying that rabbits forage effectively and sustain energy over time.
+ */
+export function createRabbitForagingScenario(seed = 42): ScenarioConfig {
+  const rng = createSeededRng(seed);
+  const width = 40;
+  const height = 40;
+  const margin = 3;
+  const randomPos = () => ({
+    x: Number(rng.nextRange(margin, width - margin).toFixed(3)),
+    y: Number(rng.nextRange(margin, height - margin).toFixed(3)),
+  });
+
+  const initialSpawns: ScenarioSpeciesSpawn[] = [];
+  const grassStages: readonly PlantStage[] = ['mature', 'mature', 'flowering', 'fruiting'];
+  for (let i = 0; i < 30; i += 1) {
+    initialSpawns.push({
+      speciesId: 'grass',
+      position: randomPos(),
+      plantStage: grassStages[i % grassStages.length],
+    });
+  }
+  const organs: readonly ReproductiveOrganId[] = [
+    'reproductive-female',
+    'reproductive-female',
+    'reproductive-female',
+    'reproductive-male',
+    'reproductive-male',
+  ];
+  for (const organ of organs) {
+    initialSpawns.push({
+      speciesId: 'rabbit',
+      position: randomPos(),
+      angle: Number((rng.next() * Math.PI * 2).toFixed(4)),
+      reproductiveOrgan: organ,
+    });
+  }
+
+  return {
+    version: 1,
+    name: 'rabbit-foraging-5',
+    description:
+      'Foraging control benchmark: 5 rabbits (3 female, 2 male) with 30 grass patches and no predators.',
+    world: {
+      seed,
+      widthMeters: width,
+      heightMeters: height,
+      gridCols: 40,
+      gridRows: 40,
+    },
+    enableReproduction: true,
+    initialFields: [
+      { fieldName: 'soil.nutrients', x: 20, y: 20, radiusMeters: 24, value: 8, mode: 'set' },
+      { fieldName: 'soil.moisture', x: 20, y: 20, radiusMeters: 24, value: 0.72, mode: 'set' },
+    ],
+    initialSpawns,
+    commands: [],
+  };
+}
+
+/**
+ * Builds a compact observation scenario for watching sexual reproduction (organ contact) and
+ * newborn juvenile-to-adult growth without altering brain modules: 5 well-fed rabbits (3 female,
+ * 2 male) in a lush 16x16 m grass enclosure where pairs naturally cross paths and raise young.
+ */
+export function createRabbitReproductionScenario(seed = 42): ScenarioConfig {
+  const rng = createSeededRng(seed);
+  const width = 10;
+  const height = 10;
+  const margin = 1.2;
+  const randomPos = () => ({
+    x: Number(rng.nextRange(margin, width - margin).toFixed(3)),
+    y: Number(rng.nextRange(margin, height - margin).toFixed(3)),
+  });
+
+  const initialSpawns: ScenarioSpeciesSpawn[] = [];
+  const grassStages: readonly PlantStage[] = ['mature', 'mature', 'flowering', 'fruiting'];
+  // Abundant grass around a cozy 10x10m glade so both parents and newborns stay well-fed.
+  const centralGrass: ReadonlyArray<{ readonly x: number; readonly y: number }> = [
+    { x: 3.5, y: 3.5 },
+    { x: 6.5, y: 3.5 },
+    { x: 3.5, y: 6.5 },
+    { x: 6.5, y: 6.5 },
+    { x: 5.0, y: 2.8 },
+    { x: 5.0, y: 7.2 },
+    { x: 2.8, y: 5.0 },
+    { x: 7.2, y: 5.0 },
+  ];
+  for (let i = 0; i < centralGrass.length; i += 1) {
+    initialSpawns.push({
+      speciesId: 'grass',
+      position: centralGrass[i] as { readonly x: number; readonly y: number },
+      plantStage: grassStages[i % grassStages.length],
+    });
+  }
+  for (let i = 0; i < 8; i += 1) {
+    initialSpawns.push({
+      speciesId: 'grass',
+      position: randomPos(),
+      plantStage: grassStages[i % grassStages.length],
+    });
+  }
+
+  // 3 female + 2 male well-fed adult rabbits in the compact glade
+  const rabbitPlacements: ReadonlyArray<{
+    readonly x: number;
+    readonly y: number;
+    readonly angle: number;
+    readonly organ: ReproductiveOrganId;
+  }> = [
+    { x: 4.5, y: 4.6, angle: 0.2, organ: 'reproductive-female' },
+    { x: 5.3, y: 4.7, angle: Math.PI - 0.15, organ: 'reproductive-male' },
+    { x: 4.6, y: 5.4, angle: -0.25, organ: 'reproductive-female' },
+    { x: 5.4, y: 5.3, angle: Math.PI + 0.2, organ: 'reproductive-male' },
+    { x: 5.0, y: 4.1, angle: Math.PI * 0.5, organ: 'reproductive-female' },
+  ];
+  for (const r of rabbitPlacements) {
+    initialSpawns.push({
+      speciesId: 'rabbit',
+      position: {
+        x: Number((r.x + rng.nextRange(-0.18, 0.18)).toFixed(3)),
+        y: Number((r.y + rng.nextRange(-0.18, 0.18)).toFixed(3)),
+      },
+      angle: Number((r.angle + rng.nextRange(-0.2, 0.2)).toFixed(4)),
+      reproductiveOrgan: r.organ,
+      initialEnergy: Number(rng.nextRange(88, 97).toFixed(2)),
+    });
+  }
+
+  return {
+    version: 1,
+    name: 'rabbit-reproduction-5',
+    description:
+      'Observation scenario: 5 well-fed rabbits (3 female, 2 male) in a compact 10x10m grass glade to observe sexual reproduction and newborn growth.',
+    world: {
+      seed,
+      widthMeters: width,
+      heightMeters: height,
+      gridCols: 20,
+      gridRows: 20,
+    },
+    enableReproduction: true,
+    initialFields: [
+      { fieldName: 'soil.nutrients', x: 5, y: 5, radiusMeters: 8, value: 9, mode: 'set' },
+      { fieldName: 'soil.moisture', x: 5, y: 5, radiusMeters: 8, value: 0.75, mode: 'set' },
+    ],
+    initialSpawns,
+    commands: [],
+  };
+}
+
+/**
+ * Resolves a built-in scenario preset by name or alias.
  */
 export function getBuiltinScenario(name: string, seed = 42): ScenarioConfig {
   switch (name) {
@@ -286,6 +522,18 @@ export function getBuiltinScenario(name: string, seed = 42): ScenarioConfig {
     case 'meadow':
     case 'default-meadow':
       return createDefaultMeadowScenario(seed);
+    case 'rabbit-starvation':
+    case 'rabbit-starvation-5':
+    case 'starvation':
+      return createRabbitStarvationScenario(seed);
+    case 'rabbit-foraging':
+    case 'rabbit-foraging-5':
+    case 'foraging':
+      return createRabbitForagingScenario(seed);
+    case 'rabbit-reproduction':
+    case 'rabbit-reproduction-5':
+    case 'reproduction':
+      return createRabbitReproductionScenario(seed);
     case 'empty':
     case 'sandbox':
     case 'empty-sandbox':
@@ -294,7 +542,7 @@ export function getBuiltinScenario(name: string, seed = 42): ScenarioConfig {
       throw new InvalidParameterError(
         'scenarioName',
         name,
-        "one of ['default', 'meadow', 'empty', 'sandbox']",
+        "one of ['default-meadow', 'rabbit-starvation-5', 'rabbit-foraging-5', 'rabbit-reproduction-5', 'empty-sandbox']",
         'getBuiltinScenario',
       );
   }
@@ -327,10 +575,23 @@ export function applyScenarioToWorld(
     const entity = spawnSpeciesEntity(world, blueprint, spawn.position, {
       ...(spawn.angle !== undefined ? { angle: spawn.angle } : {}),
       ...(spawn.plantStage !== undefined ? { plantOptions: { stage: spawn.plantStage } } : {}),
+      ...(spawn.reproductiveOrgan !== undefined
+        ? { reproductiveOrgan: spawn.reproductiveOrgan }
+        : {}),
+      ...(spawn.initialEnergy !== undefined ? { initialEnergy: spawn.initialEnergy } : {}),
+      ...(spawn.initialAgeSeconds !== undefined
+        ? { initialAgeSeconds: spawn.initialAgeSeconds }
+        : {}),
+      ...(spawn.maxAgeSeconds !== undefined ? { maxAgeSeconds: spawn.maxAgeSeconds } : {}),
     });
 
     if (scenario.enableReproduction && blueprint.kingdom === 'animal') {
-      const spec = reproductionSpecSchema.parse({});
+      const spec = reproductionSpecSchema.parse({
+        mode: 'sexual',
+        minEnergyToReproduce: Math.max(76, blueprint.metabolism.maxEnergy * 0.76),
+        mateRadiusMeters: 1.2,
+        requireOrganContact: true,
+      });
       world.ecs.addComponent(entity, ReproductionComponent, {
         speciesId: blueprint.id,
         blueprint,

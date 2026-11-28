@@ -19,6 +19,8 @@ export interface SandboxState {
   tool: SandboxTool;
   paused: boolean;
   speedMultiplier: number;
+  seed: number;
+  selectedScenarioId: string;
   selectedSpeciesId: string;
   selectedEntityId: number | null;
   heatmapField: string | null;
@@ -36,6 +38,8 @@ export function createInitialSandboxState(): SandboxState {
     tool: 'inspect',
     paused: false,
     speedMultiplier: 1,
+    seed: 42,
+    selectedScenarioId: 'default-meadow',
     selectedSpeciesId: 'rabbit',
     selectedEntityId: null,
     heatmapField: null,

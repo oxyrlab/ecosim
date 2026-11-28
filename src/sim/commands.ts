@@ -1,3 +1,4 @@
+import type { ReproductiveOrganId } from '@body/organs';
 import type { EntityId, Vec2 } from '@core/index';
 import type { PlantStage } from '@plants/components';
 import type { FieldBrushMode } from '@world/index';
@@ -22,6 +23,10 @@ export type SimCommand =
       readonly position: Vec2;
       readonly angle?: number;
       readonly plantStage?: PlantStage;
+      readonly reproductiveOrgan?: ReproductiveOrganId;
+      readonly initialEnergy?: number;
+      readonly initialAgeSeconds?: number;
+      readonly maxAgeSeconds?: number;
     }
   | {
       readonly type: 'remove-entity';

@@ -1,4 +1,5 @@
 import type { AppearanceFeatures } from '@appearance/features';
+import type { ReproductiveOrganId } from '@body/organs/reproductive-organ';
 import type { PortHandleMap, PortMap, PortWriter } from '@bus/ports';
 import {
   assertKebabCaseId,
@@ -11,6 +12,16 @@ import {
 } from '@core/index';
 
 /**
+ * Read-only observation of a neighbor's reproductive organ for mate/contact sensing.
+ */
+export interface NeighborReproductiveOrgan {
+  readonly organId: ReproductiveOrganId;
+  readonly speciesId: string;
+  readonly worldPosition: Vec2;
+  readonly contactRadiusMeters: number;
+}
+
+/**
  * Read-only observation of a nearby entity returned by {@link SensorContext.queryNeighbors}.
  */
 export interface NeighborObservation {
@@ -20,6 +31,8 @@ export interface NeighborObservation {
   readonly tags: ReadonlySet<string>;
   /** Optional normalized appearance features for feature-based vision learning (Phase 6). */
   readonly appearanceFeatures?: AppearanceFeatures;
+  /** Optional reproductive organ snapshot for complementary mate sensing. */
+  readonly reproductiveOrgan?: NeighborReproductiveOrgan;
 }
 
 /**
@@ -31,7 +44,8 @@ export interface SensorRaycastHit {
 }
 
 /**
- * Read-only internal proprioceptive body metrics exposed to internal sensors (energy, pain).
+ * Read-only internal proprioceptive body metrics exposed to internal sensors (energy, pain,
+ * reproductive readiness).
  */
 export interface InternalBodyState {
   /** Normalized remaining energy `current / max` in `[0, 1]`. */
@@ -40,6 +54,12 @@ export interface InternalBodyState {
   readonly healthRatio: number;
   /** One-tick normalized pain spike in `[0, 1]` from recent damage. */
   readonly painPulse: number;
+  /** Whether the creature has reached adult maturity. */
+  readonly isMature?: boolean;
+  /** Owning creature's species ID (for conspecific organ matching). */
+  readonly speciesId?: string;
+  /** Owning creature's reproductive organ snapshot, if present. */
+  readonly reproductiveOrgan?: NeighborReproductiveOrgan | undefined;
 }
 
 /**

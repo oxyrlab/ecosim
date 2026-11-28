@@ -273,6 +273,7 @@ const SENSOR_FIXTURES: Readonly<Record<string, { validParams: unknown; invalidPa
     'olfactory-sensor': { validParams: {}, invalidParams: { channels: [] } },
     'energy-sensor': { validParams: {}, invalidParams: 'invalid' },
     'pain-sensor': { validParams: {}, invalidParams: 'invalid' },
+    'reproductive-sensor': { validParams: {}, invalidParams: { detectionRadiusMeters: -1 } },
   };
 
 const ACTUATOR_FIXTURES: Readonly<
@@ -304,8 +305,8 @@ describe('Automatic registry contract coverage', () => {
   it('covers every registered shape, rule, organ, sensor, actuator, brain module, spine, and species', () => {
     expect(shapeRegistry.size).toBe(7);
     expect(ruleRegistry.size).toBe(19);
-    expect(organRegistry.size).toBe(4);
-    expect(sensorRegistry.size).toBe(4);
+    expect(organRegistry.size).toBe(6);
+    expect(sensorRegistry.size).toBe(5);
     expect(actuatorRegistry.size).toBe(3);
     expect(brainModuleRegistry.size).toBe(8);
     expect(spineRegistry.size).toBe(1);

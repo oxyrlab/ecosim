@@ -17,6 +17,7 @@ export { stepPhotosynthesisSystem } from './photosynthesis';
 export { stepPollinationSystem } from './pollination';
 export {
   computeInitialPlantMorphology,
+  computePlantRenderKind,
   spawnFruit,
   spawnPlant,
   syncPlantVisualsAndTags,

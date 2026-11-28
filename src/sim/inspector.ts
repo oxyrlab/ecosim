@@ -1,3 +1,8 @@
+import {
+  ReproductiveOrganComponent,
+  type BiologicalSex,
+  type ReproductiveOrganId,
+} from '@body/organs';
 import { type EntityId, type Vec2 } from '@core/index';
 import { ReproductionComponent } from '@genome/index';
 import { CorpseComponent, EnergyComponent, HealthComponent, LifecycleComponent } from '@life/index';
@@ -85,6 +90,11 @@ export interface EntityInspection {
     readonly cooldownRemainingSeconds: number;
     readonly mode: string;
   };
+  readonly reproductiveOrgan?: {
+    readonly organId: ReproductiveOrganId;
+    readonly sex: BiologicalSex;
+    readonly inContact: boolean;
+  };
   readonly neuromodulators?: {
     readonly reward: number;
     readonly aversive: number;
@@ -145,6 +155,7 @@ export function inspectEntity(world: World, entityId: EntityId): EntityInspectio
   const health = world.ecs.getComponent(entityId, HealthComponent);
   const lifecycle = world.ecs.getComponent(entityId, LifecycleComponent);
   const repro = world.ecs.getComponent(entityId, ReproductionComponent);
+  const organ = world.ecs.getComponent(entityId, ReproductiveOrganComponent);
 
   let kingdom: EntityInspection['kingdom'] = 'body';
   let speciesId: string | null = null;
@@ -273,6 +284,15 @@ export function inspectEntity(world: World, entityId: EntityId): EntityInspectio
             offspringCount: repro.offspringCount,
             cooldownRemainingSeconds: repro.cooldownRemainingSeconds,
             mode: repro.spec.mode,
+          },
+        }
+      : {}),
+    ...(organ !== undefined
+      ? {
+          reproductiveOrgan: {
+            organId: organ.organId,
+            sex: organ.sex,
+            inContact: organ.inContact,
           },
         }
       : {}),

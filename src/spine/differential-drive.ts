@@ -9,6 +9,8 @@ import { defineSpine } from './spine-def';
 export const differentialDriveParamsSchema = z.object({
   forwardGain: z.number().finite().positive().default(1),
   turnGain: z.number().finite().positive().default(1),
+  /** Fraction of `move.turn` mixed into left/right thrusters (`0` delegates turning purely to `rotator.turn`). */
+  differentialTurnScale: z.number().finite().min(0).max(1).default(1),
 });
 
 /** Validated parameters for {@link differentialDriveSpine}. */
@@ -71,9 +73,10 @@ export const differentialDriveSpine = defineSpine({
       tick(input, output) {
         const fwd = input.get(inputs['move.forward']) * params.forwardGain;
         const turn = input.get(inputs['move.turn']) * params.turnGain;
+        const diffTurn = turn * params.differentialTurnScale;
 
-        output.set(outputs['left.power'], clamp(fwd + turn, -1, 1));
-        output.set(outputs['right.power'], clamp(fwd - turn, -1, 1));
+        output.set(outputs['left.power'], clamp(fwd + diffTurn, -1, 1));
+        output.set(outputs['right.power'], clamp(fwd - diffTurn, -1, 1));
         output.set(outputs['rotator.turn'], clamp(turn, -1, 1));
         output.set(outputs['mouth.bite'], input.get(inputs['action.bite']));
       },

@@ -2,9 +2,10 @@
 
 # Sensors Catalog
 
-| Id                 | Sample Rate | Description                                                                                                        |
-| ------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------ |
-| `vision-sensor`    | 10 Hz       | Sector-based FOV vision sensor reporting per-sector distance, size, and tag-filtered target bearings.              |
-| `olfactory-sensor` | 10 Hz       | Stereo scent sensor sampling left/right field points with bilinear interpolation to output intensity and gradient. |
-| `energy-sensor`    | 10 Hz       | Internal proprioceptive sensor reporting normalized body energy level and hunger deficit.                          |
-| `pain-sensor`      | 30 Hz       | Internal nociceptive sensor emitting a one-tick pain pulse on damage and continuous health ratio.                  |
+| Id                    | Sample Rate | Description                                                                                                        |
+| --------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------ |
+| `vision-sensor`       | 10 Hz       | Sector-based FOV vision sensor reporting per-sector distance, size, and tag-filtered target bearings.              |
+| `olfactory-sensor`    | 10 Hz       | Stereo scent sensor sampling left/right field points with bilinear interpolation to output intensity and gradient. |
+| `energy-sensor`       | 10 Hz       | Internal proprioceptive sensor reporting normalized body energy level and hunger deficit.                          |
+| `pain-sensor`         | 30 Hz       | Internal nociceptive sensor emitting a one-tick pain pulse on damage and continuous health ratio.                  |
+| `reproductive-sensor` | 10 Hz       | Detects nearby and overlapping complementary conspecific reproductive organs and reports readiness.                |

@@ -4,6 +4,13 @@ All notable changes to EcoSim, including any changes to default Constraint Rule 
 
 ## [Unreleased]
 
+### Added & Calibrated — Milestone 2 (Visual Overhaul, Organ-Based Sex, Allometric Locomotion & Ecological Benchmarks)
+
+- **Visual Overhaul (Groups 1–4):** Added high-DPI top-down layered vector sprites for animals (`src/render/species-shapes.ts`), 6-stage plant sprites (`src/render/plant-shapes.ts`, `src/plants/spawn.ts`), world objects (`src/render/object-shapes.ts`, `src/life/death.ts`, `src/life/decomposition.ts`), and organic dark-meadow terrain (`src/render/terrain.ts`, `src/render/renderer.ts`).
+- **Organ-Based Sex & Signaling:** Added `reproductive-male` and `reproductive-female` organs + `ReproductiveOrganComponent` (`src/body/organs/reproductive-organ.ts`) and `reproductive-sensor` (`src/body/sensors/reproductive-sensor.ts`) with complementary organ contact enforcement (`src/genome/reproduction.ts`), Inspector readout, and subtle animal marker spots.
+- **Allometric Locomotion & Ecological Calibration:** Added `bodyScale` (`scale²` thrust, `scale⁴` torque) and closed-loop `angularVelocity` rate control to `thruster` and `rotator`, decoupled `differential-drive` turning, naturalistic `move → pause → turn` wandering (`random-wander`), alignment-gated feeding/hunting (`seek-gradient`, `fox-hunt-prey`), randomized initial energy/age/lifespan/`adultScaleRange`, newborn juvenile sizing (`0.48×`) synced during `stepAgingSystem`, and `10 sim s = 1 ecological day` metabolic calibration. Fixed bite-event `actuatorPos` aliasing and grass runaway re-flowering.
+- **Scenario Registry, HUD & Ecological Benchmarks:** Added `src/sim/scenario-registry.ts` (`default-meadow`, `rabbit-starvation-5`, `rabbit-foraging-5`, `rabbit-reproduction-5`, `empty-sandbox`), HUD Scenario Dropdown + `Seed` / `Random Seed` / `Reset` controls (`src/ui/panels/sandbox-toolbar.ts`, `src/main.ts`), and `npm run bench:ecology` (`src/headless/benchmark.ts`, `scripts/run-benchmarks.ts`).
+
 ### Added & Optimized — Phase 8 (Optimization & Procedural Canvas Rendering)
 
 - Added target-scale & micro-benchmark runner (`scripts/bench-scale.ts`, `npm run bench`) and deterministic scale stress test (`tests/scenarios/scale-budget.test.ts`).

@@ -2,9 +2,11 @@
 
 # Organs Catalog
 
-| Id          | Default Shape | Sensor Slots | Actuator Slot | Mass Density (kg/m²) | Description                                                               |
-| ----------- | ------------- | ------------ | ------------- | -------------------- | ------------------------------------------------------------------------- |
-| `body-core` | `ellipse`     | 2            | no            | 1                    | Primary torso structure providing body mass and hosting internal sensors. |
-| `eye`       | `circle`      | 1            | no            | 0.5                  | Circular sensory organ hosting a directional vision sensor.               |
-| `nose`      | `triangle`    | 1            | no            | 0.4                  | Forward sensory organ hosting a stereo olfactory scent sensor.            |
-| `mouth`     | `rect`        | 0            | yes           | 0.8                  | Anterior feeding organ hosting a discrete bite actuator.                  |
+| Id                    | Default Shape | Sensor Slots | Actuator Slot | Mass Density (kg/m²) | Description                                                                                     |
+| --------------------- | ------------- | ------------ | ------------- | -------------------- | ----------------------------------------------------------------------------------------------- |
+| `body-core`           | `ellipse`     | 2            | no            | 1                    | Primary torso structure providing body mass and hosting internal sensors.                       |
+| `eye`                 | `circle`      | 1            | no            | 0.5                  | Circular sensory organ hosting a directional vision sensor.                                     |
+| `nose`                | `triangle`    | 1            | no            | 0.4                  | Forward sensory organ hosting a stereo olfactory scent sensor.                                  |
+| `mouth`               | `rect`        | 0            | yes           | 0.8                  | Anterior feeding organ hosting a discrete bite actuator.                                        |
+| `reproductive-male`   | `circle`      | 1            | no            | 0.5                  | Lightweight male reproductive organ anchored to the torso that signals complementary contact.   |
+| `reproductive-female` | `circle`      | 1            | no            | 0.5                  | Lightweight female reproductive organ anchored to the torso that signals complementary contact. |

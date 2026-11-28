@@ -42,7 +42,10 @@ export const thrusterActuator = defineActuator({
     return {
       apply(ctx, input, dt) {
         const power = input.get(inputs.power);
-        const forceMag = power * params.maxForceNewtons;
+        // 2D body mass scales with scale^2; scale muscle thrust allometrically so juveniles and adults share natural acceleration.
+        const bodyScale = ctx.bodyScale ?? 1;
+        const massScale = bodyScale * bodyScale;
+        const forceMag = power * params.maxForceNewtons * massScale;
         if (Math.abs(forceMag) > 1e-9) {
           ctx.applyForce(
             {

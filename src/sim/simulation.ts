@@ -18,6 +18,7 @@ import {
   stepHealthSystem,
   stepInteractionSystem,
   stepMetabolismSystem,
+  type DeathRecord,
 } from '@life/index';
 import type { CollisionEvent, PhysicsAdapter } from '@physics/types';
 import {
@@ -107,6 +108,7 @@ export class Simulation {
   private readonly replaySchedule = new Map<number, SimCommand[]>();
   private accumulatorSeconds = 0;
   private lastCollisionEvents: readonly CollisionEvent[] = [];
+  private lastDeathRecords: readonly DeathRecord[] = [];
   private cumulativeBirths = 0;
   private cumulativeDeaths = 0;
 
@@ -196,6 +198,11 @@ export class Simulation {
   /** Returns the collision events collected during the most recent fixed tick. */
   public getLastCollisionEvents(): readonly CollisionEvent[] {
     return this.lastCollisionEvents;
+  }
+
+  /** Returns the death records emitted during the most recent fixed tick. */
+  public getLastDeathRecords(): readonly DeathRecord[] {
+    return this.lastDeathRecords;
   }
 
   /** Returns a live {@link SimulationStatsSnapshot} for the current tick. */
@@ -319,6 +326,7 @@ export class Simulation {
     stepSeedDispersalSystem(this.world, dt);
     stepHealthSystem(this.world, dt);
     const deaths = stepDeathSystem(this.world, this.ledger);
+    this.lastDeathRecords = deaths;
     this.cumulativeDeaths += deaths.length;
     stepDecompositionSystem(this.world, dt, this.ledger);
 
@@ -486,9 +494,22 @@ export class Simulation {
           ...(command.plantStage !== undefined
             ? { plantOptions: { stage: command.plantStage } }
             : {}),
+          ...(command.reproductiveOrgan !== undefined
+            ? { reproductiveOrgan: command.reproductiveOrgan }
+            : {}),
+          ...(command.initialEnergy !== undefined ? { initialEnergy: command.initialEnergy } : {}),
+          ...(command.initialAgeSeconds !== undefined
+            ? { initialAgeSeconds: command.initialAgeSeconds }
+            : {}),
+          ...(command.maxAgeSeconds !== undefined ? { maxAgeSeconds: command.maxAgeSeconds } : {}),
         });
         if (this.enableReproduction && blueprint.kingdom === 'animal') {
-          const spec = reproductionSpecSchema.parse({});
+          const spec = reproductionSpecSchema.parse({
+            mode: 'sexual',
+            minEnergyToReproduce: Math.max(76, blueprint.metabolism.maxEnergy * 0.76),
+            mateRadiusMeters: 1.2,
+            requireOrganContact: true,
+          });
           this.world.ecs.addComponent(entity, ReproductionComponent, {
             speciesId: blueprint.id,
             blueprint,

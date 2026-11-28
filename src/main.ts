@@ -2,8 +2,8 @@ import * as Comlink from 'comlink';
 import type { Vec2 } from '@core/index';
 import { EcoSimRenderer } from '@render/index';
 import {
-  createDefaultMeadowScenario,
-  createEmptySandboxScenario,
+  getScenarioPreset,
+  listScenarioPresets,
   parseScenarioJson,
   serializeScenario,
   type RenderSnapshot,
@@ -12,7 +12,6 @@ import {
 import SimWorker from '@sim/worker?worker';
 import { buildCanvasActionCommand, createInitialSandboxState, EcoSimHud } from '@ui/index';
 
-const DEFAULT_SEED = 42;
 const HUD_REFRESH_INTERVAL_MS = 250;
 
 function downloadJsonFile(filename: string, content: string): void {
@@ -30,10 +29,15 @@ async function bootstrap(): Promise<void> {
   if (container === null) return;
 
   const rawWorker = new SimWorker();
+  rawWorker.addEventListener('error', (ev) => {
+    console.error('[EcoSim Worker error]', ev.message, ev.filename, ev.lineno, ev.error);
+  });
   const worker = Comlink.wrap<SimWorkerApi>(rawWorker);
   const state = createInitialSandboxState();
 
-  const initialScenario = createDefaultMeadowScenario(DEFAULT_SEED);
+  const scenarios = listScenarioPresets();
+  const initialPreset = getScenarioPreset(state.selectedScenarioId);
+  const initialScenario = initialPreset.create(state.seed);
   let latestSnapshot: RenderSnapshot = await worker.loadScenario(initialScenario);
   const [species, fields] = await Promise.all([worker.listSpecies(), worker.listFields()]);
 
@@ -87,7 +91,23 @@ async function bootstrap(): Promise<void> {
     }
   };
 
-  const hud = new EcoSimHud(container, species, fields, {
+  const loadPresetById = (scenarioId: string, seed = state.seed): void => {
+    const preset = getScenarioPreset(scenarioId);
+    state.selectedScenarioId = preset.id;
+    state.seed = seed;
+    state.selectedEntityId = null;
+    renderer?.setSelectedEntityId(null);
+    hud.syncState(state);
+    const scenario = preset.create(seed);
+    void worker.loadScenario(scenario).then(async (snap) => {
+      latestSnapshot = snap;
+      renderer?.fitWorld(snap.worldWidth, snap.worldHeight);
+      await refreshOverlays();
+      hud.announce(`Loaded "${preset.label}" (seed ${seed}).`);
+    });
+  };
+
+  const hud = new EcoSimHud(container, species, fields, scenarios, {
     onTogglePause() {
       state.paused = !state.paused;
       hud.syncState(state);
@@ -130,19 +150,18 @@ async function bootstrap(): Promise<void> {
       state.brushValue = value;
       hud.syncState(state);
     },
-    onLoadPreset(preset) {
-      const scenario =
-        preset === 'default'
-          ? createDefaultMeadowScenario(DEFAULT_SEED)
-          : createEmptySandboxScenario(DEFAULT_SEED);
-      state.selectedEntityId = null;
-      renderer?.setSelectedEntityId(null);
-      void worker.loadScenario(scenario).then(async (snap) => {
-        latestSnapshot = snap;
-        renderer?.fitWorld(snap.worldWidth, snap.worldHeight);
-        await refreshOverlays();
-        hud.announce(`Loaded scenario "${scenario.name}".`);
-      });
+    onSelectScenario(scenarioId) {
+      loadPresetById(scenarioId, state.seed);
+    },
+    onResetScenario() {
+      loadPresetById(state.selectedScenarioId, state.seed);
+    },
+    onSeedChange(seed) {
+      loadPresetById(state.selectedScenarioId, seed);
+    },
+    onRandomizeSeed() {
+      const nextSeed = 1 + Math.floor(Math.random() * 999_999);
+      loadPresetById(state.selectedScenarioId, nextSeed);
     },
     onSaveScenario() {
       void worker.exportScenario().then((exported) => {
@@ -156,8 +175,10 @@ async function bootstrap(): Promise<void> {
     onLoadScenarioJson(jsonText) {
       try {
         const scenario = parseScenarioJson(jsonText);
+        state.seed = scenario.world.seed;
         state.selectedEntityId = null;
         renderer?.setSelectedEntityId(null);
+        hud.syncState(state);
         void worker.loadScenario(scenario).then(async (snap) => {
           latestSnapshot = snap;
           renderer?.fitWorld(snap.worldWidth, snap.worldHeight);
@@ -227,4 +248,6 @@ async function bootstrap(): Promise<void> {
   requestAnimationFrame(frame);
 }
 
-void bootstrap();
+void bootstrap().catch((err: unknown) => {
+  console.error('[EcoSim bootstrap failed]', err);
+});

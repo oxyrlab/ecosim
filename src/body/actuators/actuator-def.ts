@@ -47,6 +47,10 @@ export interface ActuatorContext {
   readonly worldPosition: Vec2;
   /** World-space orientation of the part hosting this actuator (radians). */
   readonly worldAngle: number;
+  /** Physical body scale multiplier (`scale = 1` at unit size) for allometric force/torque scaling. */
+  readonly bodyScale?: number;
+  /** Current angular velocity of the target rigid body in `rad/s` for closed-loop turn rate control. */
+  readonly angularVelocity?: number;
   /** Applies a force in Newtons to the target physical body (default at `worldPosition`). */
   applyForce(force: Vec2, atWorldPoint?: Vec2): void;
   /** Applies an impulse in `N·s` to the target physical body (default at `worldPosition`). */

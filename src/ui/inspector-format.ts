@@ -103,6 +103,12 @@ export function formatInspectionSections(
       value: `Gen ${inspection.reproduction.generation} · ${inspection.reproduction.offspringCount} offspring (${inspection.reproduction.mode})`,
     });
   }
+  if (inspection.reproductiveOrgan !== undefined) {
+    vitalRows.push({
+      label: 'Reproductive Organ',
+      value: `${inspection.reproductiveOrgan.organId} (${inspection.reproductiveOrgan.sex})${inspection.reproductiveOrgan.inContact ? ' · contact' : ''}`,
+    });
+  }
   if (vitalRows.length > 0) {
     sections.push({
       id: 'vitals',

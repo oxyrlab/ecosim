@@ -1,7 +1,7 @@
 # EcoSim — Milestone 2 Baseline & Development Handoff
 
-> **Status:** Milestone 1 (Phases 0–8) **Completed** · Milestone 2 **Ready for Specification**
-> **Last Updated:** 2026-11-27
+> **Status:** Milestone 1 (Phases 0–8) **Completed** · Milestone 2 **In Progress** (Visual Overhaul, Behavioral Physics, Organ-Based Sex & Ecological Benchmarks Completed)
+> **Last Updated:** 2026-11-28
 
 ## 1. Purpose & System Nature
 
@@ -68,9 +68,37 @@ npm run headless -- --seed 42 --ticks 600 --scenario default --format csv --out 
 npm run bench
 ```
 
-## 5. Milestone 2 — New Phases & User Requirements
+## 5. Milestone 2 — Completed Phases & Upcoming Roadmap
 
-_(This section is reserved for the next development cycle. New phases, goals, architectural decisions, and acceptance criteria will be recorded here once defined.)_
+### Completed in Milestone 2
 
-- **Phase 9+ Scope:** _Pending user specification._
+1. **Visual Overhaul (Groups 1–4):**
+   - High-DPI top-down layered vector sprites for `rabbit` and `fox` (`src/render/species-shapes.ts`).
+   - 6-stage visual sprites (`seed → sprout → mature → flowering → fruiting → senescence`) for `grass` and `berry-bush` (`src/render/plant-shapes.ts`, `src/plants/spawn.ts`).
+   - Distinct sprites for `fruit`, `corpse` (shrinking with decomposition), and `rock`/`body` (`src/render/object-shapes.ts`, `src/life/death.ts`, `src/life/decomposition.ts`).
+   - Organic dark-meadow terrain with deterministic moss/soil patches safe across any arena size (`src/render/terrain.ts`, `src/render/renderer.ts`).
+
+2. **Organ-Based Biological Sex & Reproductive Signaling:**
+   - Added lightweight torso-anchored organs `reproductive-male` and `reproductive-female` + `ReproductiveOrganComponent` (`src/body/organs/reproductive-organ.ts`, zero extra Rapier colliders) and `reproductive-sensor` (`src/body/sensors/reproductive-sensor.ts`) emitting `contact`, `mate.near`, `mate.dir`, and `ready`.
+   - Enforced complementary-organ pairing and optional physical organ contact (`requireOrganContact`) in `stepReproductionSystem` (`src/genome/reproduction.ts`), surfaced organ state in `inspectEntity` / Inspector UI, and rendered a subtle sex marker spot on animals (blue = male, pink = female).
+
+3. **Allometric Physics, Natural Locomotion & Ecological Calibration:**
+   - Calibrated 2D areal densities (`rabbit ≈ 1.53 kg`, `fox ≈ 5.0 kg`), terrestrial damping (`linearDamping = 2.8`, `angularDamping = 5.5`), decoupled `differential-drive` turning (`differentialTurnScale: 0`), natural `move → pause → turn` wandering (`src/brain/modules/random-wander.ts`), and alignment-gated foraging/hunting (`src/brain/modules/seek-gradient.ts`, `src/species/fox/hunt-prey.ts`).
+   - Added allometric actuator scaling (`thruster` force `∝ scale²`, `rotator` torque `∝ scale⁴`) and closed-loop angular-velocity rate control (`Kp = 2.5`) in `src/body/actuators/{thruster,rotator}.ts` + `src/species/creature-runtime.ts`, eliminating rapid spinning in both adults (`1,225 deg/s → 17 deg/s`) and juveniles (`17.6 deg/s`).
+   - Added deterministic individual variation on spawn (`initialEnergyRange`, `initialAgeRange`, `maxAgeRange`, `adultScaleRange: [0.85, 1.15]`), juvenile newborn sizing (`juvenileScale = 0.48`), live growth sync in `stepAgingSystem`, and calibrated metabolism/lifespan to `10 sim s = 1 ecological day`.
+   - Fixed shared mutable `actuatorPos` bug on `bite` emission and added post-fruiting rest cooldown + natural crowding density for `grass`.
+
+4. **Shared Scenario Registry, HUD Controls & Ecological Benchmark Suite:**
+   - Built `src/sim/scenario-registry.ts` shared by the HUD **Scenario Dropdown** + **`Seed` input / `Random Seed` / `Reset`** controls (`src/ui/panels/sandbox-toolbar.ts`, `src/main.ts`) and the high-speed headless validator (`src/headless/benchmark.ts`, `scripts/run-benchmarks.ts`, `npm run bench:ecology`).
+   - Built-in scenarios: `default-meadow`, `rabbit-starvation-5` (5 rabbits: 3♀, 2♂, 0 plants), `rabbit-foraging-5` (control meadow), `rabbit-reproduction-5` (compact 10×10 m breeding & juvenile growth glade), and `empty-sandbox`.
+   - **Verified Benchmark Results (`seed = 42`, real Rapier WASM):**
+     - `rabbit-starvation-5` (`224 ms`): `5 → 0`, `100%` starvation (`0` aging, `0` births), `LT50 = 83.0 s` (`-7.8%` vs. 9-day _Oryctolagus cuniculus_ reference), `spread = 13.4 s`, `mean |ω| = 17.1 deg/s`, `EnergyLedger Δ = -0.00009 EU`.
+     - `rabbit-foraging-5` (`659 ms`): `5 → 5` (`0%` mortality), `mean |ω| = 19.2 deg/s`, `peak |ω| = 180.0 deg/s`, `EnergyLedger Δ = -0.00971 EU`.
+   - **Verified Test Suite:** `145` test files / `386` tests passing, `docs:catalog` (`6` organs, `5` sensors), `typecheck`, `lint`, `docs:check`, and `vite build` green.
+
+### Next Planned Phases (Pending Prioritization)
+
+- **Wall/obstacle perception & avoidance** (vision/whisker boundary awareness so creatures steer smoothly out of corners).
+- **Mate-seeking behavior module (`seek-mate`)** wired to `reproductive-sensor` signals (`mate.near`, `mate.dir`, `ready`).
+- **Additional ecological benchmark scenarios** (predator-prey dynamics, carrying capacity, multi-generation evolution).
 - **Architectural Change Rule:** Any requirement that modifies core invariants or existing ADRs must be discussed and recorded as a new ADR (`docs/adr/0011-*.md`) before implementation.

@@ -20,15 +20,17 @@ export const FOX_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
         id: 'torso',
         z: 1,
         shape: { type: 'ellipse', w: 0.62, h: 0.3 },
+        massDensity: 26,
         style: { fill: { h: 22, s: 0.78, l: 0.48 } },
         sensors: [
           { instanceId: 'energy', sensor: 'energy-sensor' },
           { instanceId: 'pain', sensor: 'pain-sensor' },
+          { instanceId: 'repro', sensor: 'reproductive-sensor' },
         ],
         actuator: {
           instanceId: 'turner',
           actuator: 'rotator',
-          params: { maxTorqueNewtonMeters: 3.2 },
+          params: { maxTorqueNewtonMeters: 3.0, energyPerTorqueSecond: 0.015 },
         },
       },
       {
@@ -38,6 +40,7 @@ export const FOX_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
         pivot: 'back',
         z: 2,
         shape: { type: 'triangle', w: 0.24, h: 0.26 },
+        massDensity: 20,
         style: { fill: { h: 22, s: 0.75, l: 0.52 } },
         sensors: [
           {
@@ -63,7 +66,7 @@ export const FOX_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
         actuator: {
           instanceId: 'mouth',
           actuator: 'bite',
-          params: { rangeMeters: 0.6, damage: 12, cooldownSeconds: 0.7 },
+          params: { rangeMeters: 0.7, damage: 14, cooldownSeconds: 0.7, energyCostPerBite: 0.8 },
         },
       },
       {
@@ -89,7 +92,7 @@ export const FOX_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
         actuator: {
           instanceId: 'thrust',
           actuator: 'thruster',
-          params: { maxForceNewtons: 7, energyPerNewtonSecond: 0.025 },
+          params: { maxForceNewtons: 46, energyPerNewtonSecond: 0.003 },
         },
         anim: [{ kind: 'swing', channel: '$actuator:power', amplitude: 0.35 }],
       },
@@ -100,7 +103,7 @@ export const FOX_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
         pivot: 'front',
         z: 0,
         shape: { type: 'capsule', length: 0.3, radius: 0.055 },
-        massDensity: 1.2,
+        massDensity: 14,
         joint: { type: 'revolute', limits: [-0.55, 0.55] },
         style: { fill: { h: 24, s: 0.8, l: 0.54 } },
       },
@@ -115,7 +118,11 @@ export const FOX_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
         module: 'seek-gradient',
         params: { forwardSpeed: 0.7, biteProximityThreshold: 0.85 },
       },
-      { instanceId: 'wander', module: 'random-wander', params: { baseUrgency: 0.2 } },
+      {
+        instanceId: 'wander',
+        module: 'random-wander',
+        params: { baseUrgency: 0.2, cruiseSpeed: 0.34, maxTurnRate: 0.5 },
+      },
       {
         instanceId: 'arbiter',
         module: 'behavior-arbiter',
@@ -126,7 +133,7 @@ export const FOX_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
   spine: {
     instanceId: 'spine',
     spine: 'differential-drive',
-    params: { forwardGain: 1, turnGain: 1 },
+    params: { forwardGain: 1, turnGain: 1, differentialTurnScale: 0 },
   },
   wiring: [
     // Energy -> Hunger -> Hunt & Scavenge drives
@@ -157,10 +164,11 @@ export const FOX_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
     { from: 'spine:mouth.bite', to: 'mouth:trigger' },
   ],
   metabolism: {
-    initialEnergy: 65,
-    maxEnergy: 120,
-    structuralEnergy: 18,
-    basalRatePerKgPerSecond: 0.4,
+    initialEnergy: 120,
+    initialEnergyRange: [100, 140],
+    maxEnergy: 180,
+    structuralEnergy: 24,
+    basalRatePerKgPerSecond: 0.18,
     brainUpkeepPerModulePerSecond: 0.025,
     starvationDamagePerSecond: 3.5,
   },
@@ -169,10 +177,13 @@ export const FOX_BLUEPRINT: AnimalSpeciesBlueprint = defineSpecies({
     edibleTags: ['prey', 'corpse'],
   },
   lifecycle: {
-    maxAgeSeconds: 240,
-    maturityAgeSeconds: 30,
-    juvenileScale: 0.65,
+    maxAgeSeconds: 1500,
+    maxAgeRange: [1300, 1700],
+    maturityAgeSeconds: 90,
+    initialAgeRange: [110, 300],
+    juvenileScale: 0.5,
     adultScale: 1,
+    adultScaleRange: [0.85, 1.15],
     senescenceStartFraction: 0.78,
     minSenescenceEfficiency: 0.55,
     maxHealth: 45,

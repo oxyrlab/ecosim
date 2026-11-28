@@ -70,13 +70,14 @@ describe('fox-hunt-prey module', () => {
     expect(bus.reader.get(h(6))).toBeGreaterThan(0);
     expect(bus.reader.get(h(8))).toBe(0);
 
-    // Close visual prey -> chase & bite
+    // Close visual prey -> chase & bite (slows gently while aligning to off-center target)
     bus.writer.set(h(1), 0.9);
     bus.writer.set(h(2), -0.2);
     bus.swap();
     inst.tick(bus.reader, bus.writer, 0.1);
     bus.swap();
-    expect(bus.reader.get(h(7))).toBeCloseTo(params.chaseSpeed);
+    expect(bus.reader.get(h(7))).toBeGreaterThan(params.chaseSpeed * 0.7);
+    expect(bus.reader.get(h(7))).toBeLessThanOrEqual(params.chaseSpeed);
     expect(bus.reader.get(h(8))).toBe(1);
   });
 });

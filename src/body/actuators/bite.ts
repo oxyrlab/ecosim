@@ -57,7 +57,7 @@ export const biteActuator = defineActuator({
           ctx.emitAction({
             kind: 'bite',
             actorEntityId: ctx.entityId,
-            origin: ctx.worldPosition,
+            origin: { x: ctx.worldPosition.x, y: ctx.worldPosition.y },
             direction: { x: Math.cos(ctx.worldAngle), y: Math.sin(ctx.worldAngle) },
             rangeMeters: params.rangeMeters,
             damage: params.damage,

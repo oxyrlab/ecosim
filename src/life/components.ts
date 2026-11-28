@@ -49,6 +49,8 @@ export interface LifecycleData {
   currentScale: number;
   /** Current metabolic efficiency in `(0, 1]`. */
   efficiency: number;
+  /** Optional unit-scale (`scale = 1`) visual radius in meters synced to `RenderableStubComponent` during growth. */
+  readonly baseRadiusMeters?: number;
 }
 
 /**

@@ -16,6 +16,8 @@ import type { RuleOverride } from '@rules/types';
 export interface AnimalMetabolismSpec {
   /** Initial usable energy on spawn (`EU`). */
   readonly initialEnergy: number;
+  /** Optional `[min, max]` range sampled deterministically for initial energy variation on spawn. */
+  readonly initialEnergyRange?: readonly [min: number, max: number];
   /** Maximum energy storage capacity (`EU`). */
   readonly maxEnergy: number;
   /** Structural biomass energy released into corpse on death (`EU`). */
@@ -44,12 +46,18 @@ export interface AnimalDietSpec {
 export interface AnimalLifecycleSpec {
   /** Maximum lifespan in seconds. */
   readonly maxAgeSeconds: number;
+  /** Optional `[min, max]` range sampled deterministically for individual lifespan variation. */
+  readonly maxAgeRange?: readonly [min: number, max: number];
   /** Age at which full adult scale is reached in seconds. */
   readonly maturityAgeSeconds: number;
+  /** Optional `[min, max]` range sampled deterministically for initial adult age on spawn. */
+  readonly initialAgeRange?: readonly [min: number, max: number];
   /** Body scale multiplier at birth. */
   readonly juvenileScale: number;
   /** Body scale multiplier at maturity. */
   readonly adultScale: number;
+  /** Optional `[min, max]` range sampled deterministically for individual adult size variation. */
+  readonly adultScaleRange?: readonly [min: number, max: number];
   /** Fraction of `maxAgeSeconds` at which senescence efficiency decline begins. */
   readonly senescenceStartFraction: number;
   /** Minimum metabolic efficiency reached at `maxAgeSeconds`. */
@@ -131,8 +139,13 @@ export interface PlantSpeciesBlueprint {
  */
 export type SpeciesBlueprint = AnimalSpeciesBlueprint | PlantSpeciesBlueprint;
 
+const positiveRangeSchema = z
+  .tuple([z.number().finite().nonnegative(), z.number().finite().positive()])
+  .refine(([min, max]) => max >= min, 'range max must be >= min');
+
 const animalMetabolismSchema = z.object({
   initialEnergy: z.number().finite().positive(),
+  initialEnergyRange: positiveRangeSchema.optional(),
   maxEnergy: z.number().finite().positive(),
   structuralEnergy: z.number().finite().nonnegative(),
   basalRatePerKgPerSecond: z.number().finite().nonnegative(),
@@ -147,9 +160,12 @@ const animalDietSchema = z.object({
 
 const animalLifecycleSchema = z.object({
   maxAgeSeconds: z.number().finite().positive(),
+  maxAgeRange: positiveRangeSchema.optional(),
   maturityAgeSeconds: z.number().finite().positive(),
+  initialAgeRange: positiveRangeSchema.optional(),
   juvenileScale: z.number().finite().positive(),
   adultScale: z.number().finite().positive(),
+  adultScaleRange: positiveRangeSchema.optional(),
   senescenceStartFraction: z.number().finite().min(0).max(1),
   minSenescenceEfficiency: z.number().finite().gt(0).max(1),
   maxHealth: z.number().finite().positive(),

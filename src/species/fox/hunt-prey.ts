@@ -84,13 +84,16 @@ export const foxHuntPreyModule = registerBrainModule(
 
           if (drive >= params.minDriveToHunt) {
             if (seen > 0.02) {
+              const deadzonedDir = Math.abs(dir) < 0.04 ? 0 : dir;
               urgency = clamp(0.4 + drive * 0.4 + seen * 0.4, 0, 1);
-              turn = clamp(dir * params.visionTurnGain, -1, 1);
-              forward = params.chaseSpeed;
+              turn = clamp(deadzonedDir * params.visionTurnGain, -1, 1);
+              const alignment = clamp(1 - 1.35 * Math.abs(dir), 0.1, 1);
+              forward = params.chaseSpeed * alignment;
             } else if (scentInt > 0.01) {
+              const deadzonedGrad = Math.abs(scentGrad) < 0.03 ? 0 : scentGrad;
               urgency = clamp(drive * (0.35 + scentInt * 0.65), 0, 1);
-              turn = clamp(scentGrad * params.scentTurnGain, -1, 1);
-              forward = params.stalkSpeed;
+              turn = clamp(deadzonedGrad * params.scentTurnGain, -1, 1);
+              forward = params.stalkSpeed * clamp(1 - 0.8 * Math.abs(turn), 0.15, 1);
             }
           }
 
@@ -99,7 +102,11 @@ export const foxHuntPreyModule = registerBrainModule(
           output.set(forwardH, forward);
           output.set(
             biteH,
-            seen >= params.biteProximityThreshold && drive >= params.minDriveToHunt ? 1 : 0,
+            seen >= params.biteProximityThreshold &&
+              Math.abs(dir) <= 0.35 &&
+              drive >= params.minDriveToHunt
+              ? 1
+              : 0,
           );
         },
       };

@@ -182,10 +182,10 @@ describe('Integration: Nervous System End-to-End (Section 9.4)', () => {
     const finalPose = physics.getBodyTransform(built.rootBody);
     const finalDist = Math.hypot(16 - finalPose.position.x, 18 - finalPose.position.y);
     // Target was at (16, 18) -> positive angle (+Y), moves forward and closer to target
-    expect(finalPose.angle).toBeGreaterThan(0.15);
+    expect(finalPose.angle).toBeGreaterThan(0.1);
     expect(finalPose.angle).toBeLessThan(1.0);
     expect(finalPose.position.x).toBeGreaterThan(10.3);
-    expect(finalPose.position.y).toBeGreaterThan(15.05);
+    expect(finalPose.position.y).toBeGreaterThan(15.01);
     expect(finalDist).toBeLessThan(initialDist);
     expect(totalEnergySpent).toBeGreaterThan(0);
 

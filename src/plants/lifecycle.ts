@@ -183,7 +183,11 @@ export function stepPlantLifecycleSystem(world: World, dt: number): void {
           syncPlantVisualsAndTags(world, entity, plant.stage);
         }
 
+        const restComplete =
+          plant.totalFruitsProduced === 0 ||
+          plant.stageTimeSeconds >= spec.matureToFloweringAgeSeconds;
         if (
+          restComplete &&
           lifecycle.ageSeconds >= spec.matureToFloweringAgeSeconds &&
           energy.current >= spec.matureToFloweringEnergy
         ) {

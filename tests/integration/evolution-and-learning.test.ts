@@ -134,13 +134,13 @@ describe('Phase 6 evolution, reproduction, and learned fear (real Rapier WASM)',
     const beforeSnap = world.ecs.requireComponent(rabbit, CreatureBrainComponent).bus.snapshot();
     expect(beforeSnap['threat.predictedDanger'] ?? 0).toBe(0);
 
-    // Simulate 3 bite/pain episodes while the rabbit faces the untagged hunter at 3 m distance
+    // Simulate 3 bite/pain episodes while the rabbit faces the untagged hunter at ~4.2 m distance
     const rabbitHealth = world.ecs.requireComponent(rabbit, HealthComponent);
     const rabbitBody = world.ecs.requireComponent(rabbit, PhysicsBodyComponent).bodyHandle;
     const hunterBody = world.ecs.requireComponent(hunter, PhysicsBodyComponent).bodyHandle;
     for (let ep = 0; ep < 3; ep += 1) {
       world.physics.setBodyTransform(rabbitBody, { x: 10, y: 15 }, 0);
-      world.physics.setBodyTransform(hunterBody, { x: 13, y: 15 }, Math.PI);
+      world.physics.setBodyTransform(hunterBody, { x: 14.2, y: 15 }, Math.PI);
       world.syncFromPhysics();
       stepEcosystemTick(world, 0.12, ledger);
       rabbitHealth.pendingDamage = 4;
@@ -150,7 +150,7 @@ describe('Phase 6 evolution, reproduction, and learned fear (real Rapier WASM)',
 
     // Re-present the untagged hunter in front of the conditioned rabbit -> high danger & fleeing turn!
     world.physics.setBodyTransform(rabbitBody, { x: 10, y: 15 }, 0);
-    world.physics.setBodyTransform(hunterBody, { x: 13, y: 15 }, Math.PI);
+    world.physics.setBodyTransform(hunterBody, { x: 14.2, y: 15 }, Math.PI);
     world.syncFromPhysics();
     stepEcosystemTick(world, 0.05, ledger);
     stepEcosystemTick(world, 0.05, ledger);

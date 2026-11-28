@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { InvalidParameterError } from '@core/index';
 import { createMockPhysicsAdapter } from '@physics/mock-adapter';
-import { World } from '@world/index';
+import { RenderableStubComponent, World } from '@world/index';
 import { computeGrowthScale, computeMetabolicEfficiency, stepAgingSystem } from './aging';
 import { HealthComponent, LifecycleComponent, type LifecycleData } from './components';
 
@@ -55,6 +55,30 @@ describe('aging system', () => {
     const health = world.ecs.requireComponent(e, HealthComponent);
     expect(health.dead).toBe(true);
     expect(health.deathCause).toBe('aging');
+
+    // Juvenile entity with baseRadiusMeters grows its RenderableStubComponent.radius smoothly to adult size
+    const baby = world.spawnSimpleBody({ position: { x: 5, y: 5 }, radius: 0.2 });
+    world.ecs.addComponent(
+      baby,
+      LifecycleComponent,
+      makeLifecycle({
+        ageSeconds: 0,
+        maturityAgeSeconds: 20,
+        juvenileScale: 0.5,
+        adultScale: 1.1,
+        baseRadiusMeters: 0.4,
+      }),
+    );
+    stepAgingSystem(world, 10);
+    expect(world.ecs.requireComponent(baby, RenderableStubComponent).radius).toBeCloseTo(
+      0.4 * 0.8,
+      3,
+    );
+    stepAgingSystem(world, 15);
+    expect(world.ecs.requireComponent(baby, RenderableStubComponent).radius).toBeCloseTo(
+      0.4 * 1.1,
+      3,
+    );
 
     expect(() => stepAgingSystem(world, -1)).toThrow(InvalidParameterError);
     world.free();

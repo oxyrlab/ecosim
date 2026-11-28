@@ -57,5 +57,10 @@ describe('thrusterActuator', () => {
     expect(applyForce).toHaveBeenCalledWith({ x: 5, y: 0 }, { x: 2, y: -0.3 });
     expect(consumeEnergy).toHaveBeenCalledWith(0.25);
     expect(thrusterActuator.energyCost(params).perUnitEffortPerSecond).toBe(1);
+
+    // Juvenile bodyScale = 0.5 scales force by s^2 = 0.25
+    applyForce.mockClear();
+    actuator.apply({ ...ctx, bodyScale: 0.5 }, bus.reader, 0.5);
+    expect(applyForce).toHaveBeenCalledWith({ x: 1.25, y: 0 }, { x: 2, y: -0.3 });
   });
 });

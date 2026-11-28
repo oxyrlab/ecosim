@@ -67,14 +67,23 @@ describe('seek-gradient module', () => {
     expect(bus.reader.get(h.turn)).toBeGreaterThan(0);
     expect(bus.reader.get(h.bite)).toBe(0);
 
-    // 2. Close visual target overrides scent and triggers bite pulse
+    // 2. Close visual target overrides scent and triggers bite pulse when reasonably aligned
     bus.writer.set(h.seen, 0.9);
-    bus.writer.set(h.dir, -0.4);
+    bus.writer.set(h.dir, -0.25);
     bus.swap();
     inst.tick(bus.reader, bus.writer, 0.1);
     bus.swap();
     expect(bus.reader.get(h.turn)).toBeLessThan(0);
     expect(bus.reader.get(h.bite)).toBe(1);
+
+    // Off-axis target turns sharply without wasting a bite on empty air
+    bus.writer.set(h.seen, 0.9);
+    bus.writer.set(h.dir, -0.65);
+    bus.swap();
+    inst.tick(bus.reader, bus.writer, 0.1);
+    bus.swap();
+    expect(bus.reader.get(h.turn)).toBeLessThan(0);
+    expect(bus.reader.get(h.bite)).toBe(0);
 
     // 3. No cue -> zero urgency
     bus.writer.set(h.seen, 0);

@@ -83,12 +83,18 @@ export const seekGradientModule = defineBrainModule({
         let cueStrength = 0;
 
         if (seen > 0.02) {
-          turn = clamp(dir * params.visionTurnGain, -1, 1);
-          forward = params.forwardSpeed;
+          const deadzonedDir = Math.abs(dir) < 0.04 ? 0 : dir;
+          turn = clamp(deadzonedDir * params.visionTurnGain, -1, 1);
+          // Slow down strongly when target is off-axis so the creature pivots to face food instead of orbiting it.
+          const alignment = clamp(1 - 1.65 * Math.abs(dir), 0.05, 1);
+          const approachScale = seen > 0.88 ? 0.45 : 1;
+          forward = params.forwardSpeed * alignment * approachScale;
           cueStrength = clamp(params.urgencyFloor + seen * (1 - params.urgencyFloor), 0, 1);
         } else if (scentIntensity > 0.01) {
-          turn = clamp(scentGradient * params.scentTurnGain, -1, 1);
-          forward = params.forwardSpeed * 0.75;
+          const deadzonedGrad = Math.abs(scentGradient) < 0.03 ? 0 : scentGradient;
+          turn = clamp(deadzonedGrad * params.scentTurnGain, -1, 1);
+          const alignment = clamp(1 - 0.85 * Math.abs(turn), 0.15, 1);
+          forward = params.forwardSpeed * 0.72 * alignment;
           cueStrength = clamp(
             params.urgencyFloor * 0.8 + scentIntensity * (1 - params.urgencyFloor * 0.8),
             0,
@@ -101,8 +107,11 @@ export const seekGradientModule = defineBrainModule({
         output.set(turnH, turn);
         output.set(forwardH, forward);
 
+        const facingTarget = Math.abs(dir) <= 0.35;
         const shouldBite =
-          seen >= params.biteProximityThreshold && drive >= params.minDriveToBite ? 1 : 0;
+          seen >= params.biteProximityThreshold && facingTarget && drive >= params.minDriveToBite
+            ? 1
+            : 0;
         output.set(biteH, shouldBite);
       },
     };

@@ -103,8 +103,27 @@ export function computeInitialPlantMorphology(
   }
 }
 
+const PLANT_STAGE_ORDER: readonly PlantStage[] = [
+  'seed',
+  'sprout',
+  'mature',
+  'flowering',
+  'fruiting',
+  'senescence',
+];
+
 /**
- * Synchronizes a plant's tags (`['plant', speciesId, stage]`) and stub render color/radius.
+ * Encodes a plant's species and lifecycle stage into a compact numeric `RenderableStubComponent.kind`
+ * code (`20..25` for grass/generic plants, `30..35` for `berry-bush`).
+ */
+export function computePlantRenderKind(speciesId: string, stage: PlantStage): number {
+  const stageIdx = Math.max(0, PLANT_STAGE_ORDER.indexOf(stage));
+  const base = speciesId === 'berry-bush' ? 30 : 20;
+  return base + stageIdx;
+}
+
+/**
+ * Synchronizes a plant's tags (`['plant', speciesId, stage]`) and stub render kind/color/radius.
  */
 export function syncPlantVisualsAndTags(world: World, entity: EntityId, stage: PlantStage): void {
   const plant = world.ecs.requireComponent(entity, PlantComponent);
@@ -118,7 +137,7 @@ export function syncPlantVisualsAndTags(world: World, entity: EntityId, stage: P
   const renderable = world.ecs.getComponent(entity, RenderableStubComponent);
   if (renderable !== undefined) {
     world.ecs.setComponent(entity, RenderableStubComponent, {
-      kind: renderable.kind,
+      kind: computePlantRenderKind(plant.speciesId, stage),
       radius: plant.currentRadius,
       color:
         stage === 'seed' || stage === 'senescence'
@@ -165,7 +184,7 @@ export function spawnPlant(
           position: clampedPos,
           radius: morph.radius,
           bodyKind: 'fixed',
-          kind: spec.speciesId === 'berry-bush' ? 4 : 2,
+          kind: computePlantRenderKind(spec.speciesId, stage),
           color: morph.color,
           tags: ['plant', spec.speciesId, stage],
           collisionGroup: COLLISION_GROUP.PLANT,
